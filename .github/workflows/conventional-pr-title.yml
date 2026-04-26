@@ -1,0 +1,14 @@
+name: Conventional PR Title
+
+on:
+  workflow_call:
+
+jobs:
+  conventional-pr-title:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    steps:
+      - uses: amannn/action-semantic-pull-request@0303e24f6de74d2cb4c6eef2c5df90d6ad3c626 # v5.5.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
