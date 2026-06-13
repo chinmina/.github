@@ -66,3 +66,20 @@ a `run:` step would not — `PATH` edits there don't carry to later steps; only
 # Go and/or Bun are set up automatically from whatever the repo declares in mise;
 # an undeclared one is simply skipped.
 ```
+
+> **Declaring `binstaller`.** Validation here is `jq 'has("binstaller")'`, so
+> the tool must surface under the exact key `binstaller` — but it has no mise
+> registry short name, and the downstream `binstaller-install-script` action
+> calls the CLI as `binst`. Both needs are met by an aliased `github:` backend
+> in `mise.toml` (not `.tool-versions`):
+>
+> ```toml
+> [tool_alias]
+> binstaller = "github:binary-install/binstaller"
+>
+> [tools]
+> binstaller = { version = "0.12.0", exe = "binst" }
+> ```
+>
+> See [Declaring `binstaller`](../../../docs/adopting-the-release-pipeline.md#declaring-binstaller)
+> for why each piece is required.

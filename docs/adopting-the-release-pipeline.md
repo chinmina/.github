@@ -88,7 +88,9 @@ channel never need a secret (keyless OIDC / `github.token`).
 
 - [ ] **mise config** (`.tool-versions` or `mise.toml`) declares every tool the
       release flow uses — mise is the version authority. **Required:** `go` and
-      `goreleaser`; add `binstaller` when that channel is on. **Optional:** `bun`
+      `goreleaser`; add `binstaller` when that channel is on (it needs a small
+      `mise.toml` block — see [Declaring `binstaller`](#declaring-binstaller)).
+      **Optional:** `bun`
       (only if the build needs it — declaring it makes the toolchain set Bun up;
       omitting it skips Bun). `setup-release-toolchain` deliberately fails,
       naming the tool, if a *required* tool is not declared — the toolkit imposes
@@ -96,6 +98,39 @@ channel never need a secret (keyless OIDC / `github.token`).
 - [ ] **release-please config + manifest** (`release-please-config.json`,
       `.release-please-manifest.json`) — repo-specific; see release-please docs.
 - [ ] **binstaller spec** at `.config/binstaller.yml` *(only if binstaller on)*.
+
+#### Declaring `binstaller`
+
+`binstaller` is the one tool that needs more than a version line, and it **must**
+live in `mise.toml` — the `.tool-versions` format can't express the alias or
+`exe` below. It has **no mise registry short name**, yet
+`setup-release-toolchain` validates it with `mise ls --current --json` +
+`jq 'has("binstaller")'`, so it must surface under the exact key `binstaller`.
+At the same time `binstaller-install-script` calls the CLI as `binst` (not
+`binstaller`), so that must be the binary on `PATH`. An aliased `github:`
+backend gives both at once:
+
+```toml
+# binstaller has no mise registry short name; alias the github backend so the
+# tool surfaces as `binstaller` (what setup-release-toolchain validates) while
+# exposing the `binst` CLI the binstaller-install-script action calls.
+[tool_alias]
+binstaller = "github:binary-install/binstaller"
+
+[tools]
+binstaller = { version = "0.12.0", exe = "binst" }
+```
+
+| Piece | Why it's required |
+|-------|-------------------|
+| `[tool_alias] binstaller = "github:binary-install/binstaller"` | Surfaces the tool under the key `binstaller` so the validator's `has("binstaller")` passes. The raw backend key (`github:binary-install/binstaller`) would surface verbatim and **fail** validation. |
+| `github:` backend | The non-deprecated backend (mise warns `ubi:` is removed in 2027.1.0). It auto-detects the `binst` binary inside the release archive with no extra `matching`/asset config. |
+| `exe = "binst"` | The archive ships a binary named `binst`; without this, mise names the **shim** after the tool (`binstaller`) and the action's `binst` call isn't on `PATH`. |
+| pinned version (`0.12.0`) | Reproducible installs, consistent with the kit's other pinned tools. |
+
+Use `[tool_alias]`, **not** the deprecated `[alias]` (mise warns on the latter).
+This replaces any brute-force `binst`-by-path workaround — no `PATH` munging or
+post-install steps needed.
 
 ---
 

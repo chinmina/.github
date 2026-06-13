@@ -22,7 +22,9 @@ spec is missing or empty the action fails before generating anything (**R27**).
 
 - The `binst` CLI must be on `PATH`. Include `binstaller` in
   `setup-release-toolchain`'s `mise-tools` earlier in the job (the wrapper does
-  this).
+  this). The consumer's `mise.toml` must declare it with `exe = "binst"` so the
+  shim is named `binst` — see
+  [Declaring `binstaller`](../../../docs/adopting-the-release-pipeline.md#declaring-binstaller).
 - `GITHUB_TOKEN` with `contents: write` (used for `gh release upload`); supplied
   automatically from the job token.
 

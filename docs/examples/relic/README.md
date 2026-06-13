@@ -26,8 +26,10 @@ defaults scope to the org and the identity to `release-please-relic`;
 `release-tap` when homebrew is enabled.
 
 You also need (not shown — repo-specific): a release-please config + manifest,
-a `.tool-versions` declaring `go`, `goreleaser`, and `binstaller`, and a
-committed binstaller spec at `.config/binstaller.yml`.
+a mise config declaring `go`, `goreleaser`, and `binstaller`, and a committed
+binstaller spec at `.config/binstaller.yml`. `binstaller` must be declared in
+`mise.toml` (not `.tool-versions`) with the `[tool_alias]` + `exe = "binst"`
+block — see [Declaring `binstaller`](../../adopting-the-release-pipeline.md#declaring-binstaller).
 
 ## Prerequisite checklist (org-admin — gates the FIRST run)
 
