@@ -10,11 +10,6 @@ reviewed commits). Third-party actions inside this repo are SHA-pinned; the
 first-party kit references ride `@verified-actions` (encoded as zizmor policy in
 [`../.github/zizmor.yml`](../.github/zizmor.yml)).
 
-> **Operating `verified-actions`.** This is a moving ref, fast-forwarded only to
-> reviewed commits on `main`. Advancing it is a privileged operation for every
-> consuming org (their workflows execute whatever it points at), so treat each
-> update as a release event with review.
-
 ## Components
 
 | Artifact | Kind | Purpose |
