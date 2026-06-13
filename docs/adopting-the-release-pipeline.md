@@ -139,6 +139,16 @@ post-install steps needed.
 Copy these into the consuming repo, preserving paths, then substitute the
 `<PLACEHOLDER>` tokens. Filenames matter where noted.
 
+> **Caller `permissions` are a ceiling.** A reusable workflow can only
+> *downgrade* the `GITHUB_TOKEN`, never elevate it ([GitHub docs][perm-docs]),
+> so the caller must grant **at least** what the reusable workflow's job
+> declares. `permissions: {}` caps `id-token`/`contents`/`attestations` to
+> nothing, which kills the octo-sts OIDC mint on the very first step. Grant:
+> - **release-please caller** → `contents: read` + `id-token: write`
+> - **release (goreleaser) caller** → `contents: write` + `id-token: write` + `attestations: write`
+>
+> [perm-docs]: https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows#access-and-permissions
+
 ### 2a. `.github/workflows/release-please.yml` (the trigger caller)
 
 ```yaml
@@ -149,8 +159,12 @@ on:
   push:
     branches: [<DEFAULT_BRANCH>] # usually main
 
-# The reusable workflow declares its own job permissions; nothing extra here.
-permissions: {}
+# Caller permissions are a CEILING — a reusable workflow can only DOWNGRADE the
+# GITHUB_TOKEN, never elevate it. Grant at least what the reusable workflow's job
+# declares; `permissions: {}` would starve the octo-sts OIDC mint (no id-token).
+permissions:
+  contents: read
+  id-token: write # octo-sts OIDC token exchange (harmless on the app path)
 
 jobs:
   release-please:
@@ -178,7 +192,13 @@ on:
   push:
     tags: ["v*"]
 
-permissions: {}
+# Caller permissions are a CEILING (see 2a). Grant at least what
+# goreleaser-release.yml's job declares — `permissions: {}` would starve the
+# octo-sts mint and the keyless attestation.
+permissions:
+  contents: write # fill + publish the release, push assets
+  id-token: write # octo-sts OIDC mint + keyless attestation
+  attestations: write # record build attestations
 
 jobs:
   release:

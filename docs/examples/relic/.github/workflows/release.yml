@@ -6,7 +6,14 @@ on:
   push:
     tags: ["v*"]
 
-permissions: {}
+# Caller permissions are a CEILING: a reusable workflow can only downgrade the
+# GITHUB_TOKEN, never elevate it. Grant at least what goreleaser-release.yml's
+# job declares — `permissions: {}` would starve the octo-sts OIDC mint and the
+# keyless attestation, and the pipeline would die on its first step.
+permissions:
+  contents: write # fill + publish the release, push assets
+  id-token: write # octo-sts OIDC mint + keyless attestation
+  attestations: write # record build attestations
 
 jobs:
   release:

@@ -5,8 +5,13 @@ on:
   push:
     branches: [main]
 
-# The reusable workflow declares its own job permissions; nothing extra needed here.
-permissions: {}
+# Caller permissions are a CEILING: a reusable workflow can only downgrade the
+# GITHUB_TOKEN, never elevate it. So the caller must grant at least what the
+# reusable workflow's job declares — `permissions: {}` here would starve the
+# octo-sts OIDC mint (no id-token: write) and the pipeline dies on its first step.
+permissions:
+  contents: read
+  id-token: write # required for the octo-sts OIDC token exchange
 
 jobs:
   release-please:
