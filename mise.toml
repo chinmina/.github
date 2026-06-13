@@ -1,0 +1,8 @@
+# Dev / CI tooling for chinmina/.github itself (the shared release kit).
+# These pin the P0 quality-gate linters. Consuming repos carry their own mise
+# config; `setup-release-toolchain` reads the *consumer's* config, not this one.
+[tools]
+actionlint = "1.7.12"
+shellcheck = "0.11.0"
+shfmt = "3.13.1"
+zizmor = "1.25.2"

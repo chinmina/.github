@@ -1,0 +1,91 @@
+name: Set up release toolchain
+description: >-
+  One upfront toolchain installer with mise as the version authority. Installs
+  the requested CLIs through mise in a single cached pass, then sets up Go and/or
+  Bun via their dedicated setup actions using versions read from the consumer's
+  mise config — each is set up only when it is declared in mise. Prescriptive:
+  fails, naming the tool, if a requested CLI is not declared in mise.
+
+inputs:
+  mise-tools:
+    description: >-
+      Whitespace-separated CLI tools to install via mise, named exactly as in
+      the consumer's mise config (e.g. "goreleaser binstaller"). All are
+      required; the action fails if any is undeclared.
+    required: true
+
+outputs:
+  go_version:
+    description: Go version resolved from the consumer's mise config.
+    value: ${{ steps.versions.outputs.go_version }}
+  bun_version:
+    description: Bun version resolved from mise (empty when Bun is not declared).
+    value: ${{ steps.versions.outputs.bun_version }}
+
+runs:
+  using: composite
+  steps:
+    # One invocation installs mise AND the requested CLIs, with caching. The
+    # cache key folds in the install args, so the whole CLI set is a single
+    # coherent entry (installing tools one at a time would make an overlapping
+    # cache per tool). reshim writes the shims dir to $GITHUB_PATH so the CLIs
+    # resolve in later steps.
+    - name: Install mise + CLIs
+      uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2.4.4
+      with:
+        install_args: ${{ inputs.mise-tools }}
+        reshim: true
+        cache: true
+
+    # mise is now on PATH: verify every requested CLI is declared (R19) and
+    # export the versions of the dedicated-setup tools. Go/Bun are read from the
+    # config but installed by their own setup actions below, so no mise go/bun
+    # shim competes with them on PATH. `mise ls --current` lists declared tools
+    # regardless of what mise was asked to install.
+    - name: Resolve tool versions from mise
+      id: versions
+      shell: bash --noprofile --norc -euo pipefail {0}
+      env:
+        MISE_TOOLS: ${{ inputs.mise-tools }}
+      run: |
+        current="$(mise ls --current --json)"
+
+        # Required = the requested CLIs. Go/Bun are auto-detected below, not
+        # required: a Go project declares go, a Bun project declares bun.
+        missing=()
+        for tool in $MISE_TOOLS; do
+          if ! jq -e --arg t "$tool" 'has($t)' >/dev/null <<<"$current"; then
+            missing+=("$tool")
+          fi
+        done
+        if (( ${#missing[@]} )); then
+          echo "::error title=setup-release-toolchain::Required tools not declared in this repository's mise configuration: ${missing[*]}. Add them to mise.toml or .tool-versions." >&2
+          exit 1
+        fi
+
+        version_of() { # tool name -> configured version (empty if absent)
+          jq -r --arg t "$1" '.[$t][0].requested_version // .[$t][0].version // empty' <<<"$current"
+        }
+
+        go_version="$(version_of go)"   # empty unless declared
+        bun_version="$(version_of bun)" # empty unless declared
+        {
+          echo "go_version=${go_version}"
+          echo "bun_version=${bun_version}"
+        } >> "$GITHUB_OUTPUT"
+        echo "Resolved go=${go_version:-<none>} bun=${bun_version:-<none>}"
+
+    # Go via setup-go (module/build caching), version from mise — only when the
+    # repo declares Go (R18).
+    - name: Set up Go
+      if: ${{ steps.versions.outputs.go_version != '' }}
+      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      with:
+        go-version: ${{ steps.versions.outputs.go_version }}
+
+    # Bun via setup-bun, version from mise — only when the repo declares Bun.
+    - name: Set up Bun
+      if: ${{ steps.versions.outputs.bun_version != '' }}
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      with:
+        bun-version: ${{ steps.versions.outputs.bun_version }}

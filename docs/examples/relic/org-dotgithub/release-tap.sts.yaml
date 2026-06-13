@@ -1,0 +1,20 @@
+# Lives at: <org>/.github/.github/chainguard/release-tap.sts.yaml
+# (CENTRALISED + SHARED — one policy for all tap-publishing repos, added via a
+# reviewed PR to <org>/.github.)
+#
+# Consulted when any in-scope repo's goreleaser-release.yml mints the tap token
+# (identity `release-tap`) while publishing a Homebrew formula. Subject is a
+# pattern (any repo in the `release` env on a v* tag), narrowed by the
+# claim_pattern.repository alternation. Onboarding a repo = add it to that
+# alternation; no per-repo tap policy.
+issuer: https://token.actions.githubusercontent.com
+subject_pattern: '^repo:<org>/[^:]+:environment:release$'
+claim_pattern:
+  ref: '^refs/tags/v.*$'
+  repository: '^<org>/(relic|<other-tap-repos>)$'
+
+permissions:
+  contents: write
+
+repositories:
+  - homebrew-tap

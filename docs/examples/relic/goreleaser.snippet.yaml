@@ -1,0 +1,15 @@
+# Merge these keys into relic's .goreleaser.yaml.
+#
+# The wrapper expects goreleaser to FILL the existing release-please draft (not
+# create a new release) and to leave it a draft so attestation can run before
+# the wrapper publishes it last.
+
+# templ codegen before the build (R15) — OSS before.hooks, not a Pro feature.
+before:
+  hooks:
+    - just generate
+
+release:
+  draft: true # leave as draft; the wrapper un-drafts after attestation
+  mode: keep-existing # fill the release-please draft, don't replace it
+  prerelease: auto # mark prerelease from a semver pre-release tag (belt-and-braces with the wrapper)

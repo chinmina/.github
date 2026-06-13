@@ -1,0 +1,32 @@
+# <org>/relic — build/attest/publish on the v* tag pushed by release-please.
+# Filename kept as release.yml for future npm trusted-publishing compatibility.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+# Caller permissions are a CEILING: a reusable workflow can only downgrade the
+# GITHUB_TOKEN, never elevate it. Grant at least what goreleaser-release.yml's
+# job declares — `permissions: {}` would starve the octo-sts OIDC mint and the
+# keyless attestation, and the pipeline would die on its first step.
+permissions:
+  contents: write # fill + publish the release, push assets
+  id-token: write # octo-sts OIDC mint + keyless attestation
+  attestations: write # record build attestations
+
+jobs:
+  release:
+    uses: chinmina/.github/.github/workflows/goreleaser-release.yml@verified-actions # zizmor: ignore[secrets-inherit]
+    with:
+      # Keyless: mint the release-relic token (and release-tap when homebrew is
+      # on) against the centralised org policies instead of github.token/a PAT.
+      token-source: octo-sts
+      # GH release + binstaller on (defaults). relic ships no formula yet; flip
+      # disable-homebrew off to start using the (already-provisioned) release-tap
+      # mint + tap policy.
+      disable-homebrew: true
+      # templ codegen runs in goreleaser before.hooks, so no pre-build needed.
+    # secrets: inherit is intentional — environment-scoped secrets must resolve
+    # inside the reusable workflow's environment-targeting job.
+    secrets: inherit
