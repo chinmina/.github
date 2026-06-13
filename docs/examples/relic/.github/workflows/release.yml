@@ -1,0 +1,25 @@
+# <org>/relic — build/attest/publish on the v* tag pushed by release-please.
+# Filename kept as release.yml for future npm trusted-publishing compatibility.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions: {}
+
+jobs:
+  release:
+    uses: chinmina/.github/.github/workflows/goreleaser-release.yml@claude/prd-plan-review-lfh6yw # zizmor: ignore[secrets-inherit] | DEV REF: flip to @verified-actions before merge
+    with:
+      # Keyless: mint the release-relic token (and release-tap when homebrew is
+      # on) against the centralised org policies instead of github.token/a PAT.
+      token-source: octo-sts
+      # GH release + binstaller on (defaults). relic ships no formula yet; flip
+      # disable-homebrew off to start using the (already-provisioned) release-tap
+      # mint + tap policy.
+      disable-homebrew: true
+      # templ codegen runs in goreleaser before.hooks, so no pre-build needed.
+    # secrets: inherit is intentional — environment-scoped secrets must resolve
+    # inside the reusable workflow's environment-targeting job.
+    secrets: inherit

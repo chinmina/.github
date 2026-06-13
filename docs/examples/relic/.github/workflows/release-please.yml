@@ -1,0 +1,18 @@
+# <org>/relic — release-please trigger (keyless octo-sts path).
+name: release-please
+
+on:
+  push:
+    branches: [main]
+
+# The reusable workflow declares its own job permissions; nothing extra needed here.
+permissions: {}
+
+jobs:
+  release-please:
+    uses: chinmina/.github/.github/workflows/release-please.yml@claude/prd-plan-review-lfh6yw # zizmor: ignore[secrets-inherit] | DEV REF: flip to @verified-actions before merge
+    with:
+      token-source: octo-sts
+    # secrets: inherit is intentional — environment-scoped secrets must resolve
+    # inside the reusable workflow's environment-targeting job.
+    secrets: inherit
