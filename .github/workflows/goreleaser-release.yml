@@ -17,10 +17,6 @@
 # declares in mise.
 #
 # Consumers call this at @verified-actions with `secrets: inherit`.
-#
-# DEV REF: the first-party composite references below point at the development
-# branch so a canary can run before merge. Flip every `@claude/prd-plan-review-lfh6yw`
-# back to `@verified-actions` before merging (see docs/adopting-the-release-pipeline.md).
 
 on:
   workflow_call:
@@ -107,7 +103,7 @@ jobs:
       # repo declares in mise. Fails here, naming the tool, if a requested CLI is
       # undeclared in mise.
       - name: Set up release toolchain
-        uses: chinmina/.github/.github/actions/setup-release-toolchain@claude/prd-plan-review-lfh6yw # DEV REF: flip to @verified-actions before merge
+        uses: chinmina/.github/.github/actions/setup-release-toolchain@verified-actions
         with:
           mise-tools: goreleaser ${{ inputs.disable-binstaller && '' || 'binstaller' }}
 
@@ -153,7 +149,7 @@ jobs:
       # the release). binst is already on PATH from the upfront toolchain step.
       - name: Generate install script
         if: ${{ !inputs.disable-binstaller }}
-        uses: chinmina/.github/.github/actions/binstaller-install-script@claude/prd-plan-review-lfh6yw # DEV REF: flip to @verified-actions before merge
+        uses: chinmina/.github/.github/actions/binstaller-install-script@verified-actions
         with:
           spec: ${{ inputs.binstaller-spec }}
           version: ${{ env.TAG }}
@@ -161,7 +157,7 @@ jobs:
       # R8/R9/R28: attest the checksummed artifacts (each archive individually)
       # and install.sh, BEFORE publishing. Single pass, both subjects.
       - name: Attest artifacts
-        uses: chinmina/.github/.github/actions/attest-artifacts@claude/prd-plan-review-lfh6yw # DEV REF: flip to @verified-actions before merge
+        uses: chinmina/.github/.github/actions/attest-artifacts@verified-actions
         with:
           checksums-file: dist/checksums.txt
           extra-subject-path: ${{ inputs.disable-binstaller && '' || 'install.sh' }}

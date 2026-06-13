@@ -11,11 +11,6 @@ For the architecture (sequence diagram, component map, contracts) read the
 instance, see the [`relic` example](examples/relic/) (octo-sts / Go). This guide
 is the generic version of that example.
 
-> **Dev-ref note.** Until this kit is merged, the live refs point at the
-> development branch `claude/prd-plan-review-lfh6yw` (see README). Wherever this
-> guide shows `@verified-actions`, the canary you run today should use
-> `@claude/prd-plan-review-lfh6yw` instead. Flip back before merge.
-
 ---
 
 ## Step 0 — Decide the four parameters

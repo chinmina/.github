@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   release:
-    uses: chinmina/.github/.github/workflows/goreleaser-release.yml@claude/prd-plan-review-lfh6yw # zizmor: ignore[secrets-inherit] | DEV REF: flip to @verified-actions before merge
+    uses: chinmina/.github/.github/workflows/goreleaser-release.yml@verified-actions # zizmor: ignore[secrets-inherit]
     with:
       # Keyless: mint the release-relic token (and release-tap when homebrew is
       # on) against the centralised org policies instead of github.token/a PAT.
