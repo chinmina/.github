@@ -1,0 +1,44 @@
+name: Attest artifacts
+description: >-
+  Generate keyless build-provenance attestations for a goreleaser checksums file
+  (each artifact listed in the file becomes an individually attested subject) and,
+  optionally, an additional file such as install.sh.
+
+inputs:
+  checksums-file:
+    description: >-
+      Path to the goreleaser checksums file, in shasum format. Each file listed
+      is registered as its own attestation subject, so `gh attestation verify
+      <archive>` succeeds against the individual archives.
+    required: false
+    default: dist/checksums.txt
+  extra-subject-path:
+    description: >-
+      Optional path to an additional file to attest as its own subject, e.g. the
+      generated install.sh. Leave empty to attest only the checksummed artifacts.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Verify checksums file is present
+      shell: bash --noprofile --norc -euo pipefail {0}
+      env:
+        CHECKSUMS_FILE: ${{ inputs.checksums-file }}
+      run: |
+        if [[ ! -s "$CHECKSUMS_FILE" ]]; then
+          echo "::error title=attest-artifacts::Checksums file '${CHECKSUMS_FILE}' is missing or empty. Run goreleaser before attesting." >&2
+          exit 1
+        fi
+
+    - name: Attest checksummed artifacts
+      uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+      with:
+        subject-checksums: ${{ inputs.checksums-file }}
+
+    - name: Attest extra subject
+      if: ${{ inputs.extra-subject-path != '' }}
+      uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+      with:
+        subject-path: ${{ inputs.extra-subject-path }}

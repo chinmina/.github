@@ -1,0 +1,121 @@
+# Reusable release-please trigger workflow (PRD reqs R1-R7, R31-R34).
+#
+# Opens/updates a Release PR on pushes to the default branch and, when that PR
+# is merged, creates a DRAFT GitHub Release (no tag) and then pushes the v* tag
+# using a minted GitHub App *installation* token. Because the tag is pushed with
+# an installation token (never GITHUB_TOKEN), the tag push emits a
+# workflow-triggering event that drives the downstream release wrapper (R4).
+#
+# Token source is selected per consuming repo:
+#   - app      (default): chinmina GitHub App via create-github-app-token.
+#   - octo-sts (keyless):  octo-sts OIDC federation. The job runs in the
+#                          `automation` environment, so the OIDC subject is
+#                          environment-qualified. The trust policy is CENTRALISED
+#                          in the org's .github repo (scope defaults to the org),
+#                          at .github/chainguard/release-please-<repo>.sts.yaml,
+#                          and MUST set
+#                          subject: repo:<owner>/<repo>:environment:automation
+#                          (typically with claim_pattern.ref: refs/heads/main).
+#
+# Consumers call this at @verified-actions with `secrets: inherit`.
+
+on:
+  workflow_call:
+    inputs:
+      token-source:
+        description: Installation-token source. "app" (default) or "octo-sts".
+        required: false
+        type: string
+        default: app
+      config-file:
+        description: Path to the release-please config file.
+        required: false
+        type: string
+        default: release-please-config.json
+      manifest-file:
+        description: Path to the release-please manifest file.
+        required: false
+        type: string
+        default: .release-please-manifest.json
+      sts-identity:
+        description: >-
+          octo-sts trust policy identity (the .sts.yaml filename stem in the
+          ORG's .github/chainguard/). Only used when token-source is octo-sts.
+          Defaults to "release-please-<repo>" to match the centralised policy
+          naming in <org>/.github.
+        required: false
+        type: string
+        default: ""
+      sts-scope:
+        description: >-
+          octo-sts scope: the org (or org/repo) whose trust policies are
+          consulted. Only used when token-source is octo-sts. Defaults to the
+          repository owner so the CENTRALISED org policies are used (not the
+          consumer repo's own — which it must not be able to author).
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    environment: automation # R34
+    permissions:
+      contents: read # all writes use the minted installation token, not GITHUB_TOKEN
+      id-token: write # R34: required for the octo-sts OIDC exchange (harmless for the app path)
+    # Strict bash for every run step (GHA's `bash` keyword gives -e + pipefail
+    # but not -u; this is that same definition plus nounset), defined once.
+    defaults:
+      run:
+        shell: bash --noprofile --norc -euo pipefail {0}
+    steps:
+      # R5/R33: scope the installation token to exactly contents+pull-requests.
+      - name: Mint installation token (GitHub App)
+        id: app-token
+        if: ${{ inputs.token-source == 'app' }}
+        uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
+        with:
+          app-id: ${{ secrets.RELEASE_PLEASE_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_PLEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      # R5/R33: octo-sts scopes the token via the consumer's trust policy.
+      - name: Mint installation token (octo-sts)
+        id: octo-sts
+        if: ${{ inputs.token-source == 'octo-sts' }}
+        uses: octo-sts/action@a26b0c6455c7f13316f29a8766287f939e75f6c8 # v1.0.2
+        with:
+          # Org-scoped: the trust policy lives centrally in <org>/.github so a
+          # compromised consumer workflow cannot author its own policy.
+          scope: ${{ inputs.sts-scope != '' && inputs.sts-scope || github.repository_owner }}
+          identity: ${{ inputs.sts-identity != '' && inputs.sts-identity || format('release-please-{0}', github.event.repository.name) }}
+
+      # R6: if neither mint step produced a token, fail before release-please.
+      - name: Release Please
+        id: release
+        uses: googleapis/release-please-action@a02a34c4d625f9be7cb89156071d8567266a2445 # v4.2.0
+        with:
+          # The token is selected inline (never re-emitted to an output) so it
+          # stays masked.
+          token: ${{ inputs.token-source == 'app' && steps.app-token.outputs.token || steps.octo-sts.outputs.token }}
+          config-file: ${{ inputs.config-file }}
+          manifest-file: ${{ inputs.manifest-file }}
+
+      # R3/R4/L2: release-please created a DRAFT release with no git tag. Push the
+      # tag explicitly with the installation token so the push triggers the
+      # downstream wrapper. R7: skipped automatically when no release was created.
+      - name: Create release tag
+        if: ${{ steps.release.outputs.release_created }}
+        env:
+          GH_TOKEN: ${{ inputs.token-source == 'app' && steps.app-token.outputs.token || steps.octo-sts.outputs.token }}
+          TAG: ${{ steps.release.outputs.tag_name }}
+          TARGET_SHA: ${{ steps.release.outputs.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          echo "Creating tag ${TAG} at ${TARGET_SHA} via the installation token"
+          gh api \
+            --method POST \
+            "repos/${REPO}/git/refs" \
+            -f "ref=refs/tags/${TAG}" \
+            -f "sha=${TARGET_SHA}"

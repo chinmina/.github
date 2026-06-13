@@ -1,0 +1,181 @@
+# Reusable goreleaser release wrapper (PRD reqs R8-R11, R15-R18, R25-R30, R35).
+#
+# Serves both Go and Bun projects -- goreleaser builds either, so there is one
+# wrapper, not a Go/Bun split. Triggered by the consumer on `push` of a v* tag
+# (created by release-please). Runs the build -> attest -> publish gate:
+#   1. goreleaser builds artifacts and fills the existing release-please draft
+#      (the consumer's .goreleaser config must set release.draft: true and
+#      release.mode: keep-existing / use_existing_draft).
+#   2. (channel: binstaller) generate an attestable install.sh.
+#   3. attest the checksummed artifacts (+ install.sh) keylessly via OIDC.
+#   4. publish the release by flipping it out of draft -- last, so nothing is
+#      downloadable before its provenance exists (R10).
+#
+# Tool versions resolve via mise (the version authority): the setup-release-
+# toolchain action installs goreleaser/binstaller through mise in one cached
+# pass and sets up Go and/or Bun via their setup actions, per what the repo
+# declares in mise.
+#
+# Consumers call this at @verified-actions with `secrets: inherit`.
+#
+# DEV REF: the first-party composite references below point at the development
+# branch so a canary can run before merge. Flip every `@claude/prd-plan-review-lfh6yw`
+# back to `@verified-actions` before merging (see docs/adopting-the-release-pipeline.md).
+
+on:
+  workflow_call:
+    inputs:
+      pre-build:
+        description: >-
+          Optional shell run after tool setup and before goreleaser (R15). The
+          preferred place for codegen is goreleaser global before.hooks; this is
+          the fallback for anything goreleaser cannot cover.
+        required: false
+        type: string
+        default: ""
+      disable-binstaller:
+        description: Skip generating/attaching the binstaller install.sh (R13).
+        required: false
+        type: boolean
+        default: false
+      disable-homebrew:
+        description: Skip homebrew publication (R13). Homebrew lives in goreleaser.
+        required: false
+        type: boolean
+        default: false
+      binstaller-spec:
+        description: Path to the committed binstaller spec.
+        required: false
+        type: string
+        default: .config/binstaller.yml
+      token-source:
+        description: >-
+          Write-token source for the release job. "app" (default) uses
+          github.token (and secrets.HOMEBREW_GITHUB_TOKEN for the tap).
+          "octo-sts" mints keyless OIDC tokens against the centralised org
+          trust policies instead (no stored tap PAT).
+        required: false
+        type: string
+        default: app
+      sts-scope:
+        description: >-
+          octo-sts scope (org or org/repo) whose central trust policies are
+          consulted. octo-sts only; defaults to the repository owner.
+        required: false
+        type: string
+        default: ""
+      sts-release-identity:
+        description: >-
+          octo-sts identity for the app-repo release token (contents:write).
+          octo-sts only; defaults to "release-<repo>".
+        required: false
+        type: string
+        default: ""
+      sts-tap-identity:
+        description: >-
+          octo-sts identity for the shared Homebrew tap token (contents:write on
+          the tap). octo-sts + homebrew only; defaults to "release-tap".
+        required: false
+        type: string
+        default: release-tap
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: release # R35
+    permissions:
+      contents: write # fill + publish the release, push assets
+      id-token: write # R30: keyless attestation OIDC
+      attestations: write # R29: record attestations
+    env:
+      TAG: ${{ github.ref_name }}
+    # Strict bash for every run step (GHA's `bash` keyword gives -e + pipefail
+    # but not -u; this is that same definition plus nounset), defined once.
+    defaults:
+      run:
+        shell: bash --noprofile --norc -euo pipefail {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0 # goreleaser needs full history + tags
+          persist-credentials: false # goreleaser/gh use GITHUB_TOKEN env, not git creds
+
+      # One upfront toolchain install: the mise CLIs the enabled channels need
+      # (goreleaser, plus binstaller when its channel is on) in a single cached
+      # pass. Go and/or Bun are set up via their setup actions from whatever the
+      # repo declares in mise. Fails here, naming the tool, if a requested CLI is
+      # undeclared in mise.
+      - name: Set up release toolchain
+        uses: chinmina/.github/.github/actions/setup-release-toolchain@claude/prd-plan-review-lfh6yw # DEV REF: flip to @verified-actions before merge
+        with:
+          mise-tools: goreleaser ${{ inputs.disable-binstaller && '' || 'binstaller' }}
+
+      # The hook is consumer-provided shell. Pass it through env and execute at
+      # runtime (never expand it into the script text) to avoid template injection.
+      - name: Pre-build
+        if: ${{ inputs.pre-build != '' }}
+        env:
+          PRE_BUILD: ${{ inputs.pre-build }}
+        run: bash -c "$PRE_BUILD"
+
+      # octo-sts path: mint a contents:write token for THIS repo's release
+      # (subject is env-qualified to `release`; the central policy pins the v*
+      # tag ref). The app path uses github.token, so this is skipped there.
+      - name: Mint release token (octo-sts)
+        id: release-token
+        if: ${{ inputs.token-source == 'octo-sts' }}
+        uses: octo-sts/action@a26b0c6455c7f13316f29a8766287f939e75f6c8 # v1.0.2
+        with:
+          scope: ${{ inputs.sts-scope != '' && inputs.sts-scope || github.repository_owner }}
+          identity: ${{ inputs.sts-release-identity != '' && inputs.sts-release-identity || format('release-{0}', github.event.repository.name) }}
+
+      # octo-sts path: mint a contents:write token for the SHARED Homebrew tap,
+      # only when homebrew is on. Keyless — replaces a stored tap PAT.
+      - name: Mint tap token (octo-sts)
+        id: tap-token
+        if: ${{ inputs.token-source == 'octo-sts' && !inputs.disable-homebrew }}
+        uses: octo-sts/action@a26b0c6455c7f13316f29a8766287f939e75f6c8 # v1.0.2
+        with:
+          scope: ${{ inputs.sts-scope != '' && inputs.sts-scope || github.repository_owner }}
+          identity: ${{ inputs.sts-tap-identity }}
+
+      # R8 (build): goreleaser fills the existing release-please draft. The tap
+      # token writes the formula to the shared tap; the cask/brew itself is
+      # configured in goreleaser (R16).
+      - name: Build (goreleaser)
+        env:
+          GITHUB_TOKEN: ${{ inputs.token-source == 'octo-sts' && steps.release-token.outputs.token || github.token }}
+          HOMEBREW_GITHUB_TOKEN: ${{ inputs.disable-homebrew && '' || (inputs.token-source == 'octo-sts' && steps.tap-token.outputs.token || secrets.HOMEBREW_GITHUB_TOKEN) }}
+        run: goreleaser release --clean
+
+      # Channel: binstaller. Generate install.sh (attested below, published with
+      # the release). binst is already on PATH from the upfront toolchain step.
+      - name: Generate install script
+        if: ${{ !inputs.disable-binstaller }}
+        uses: chinmina/.github/.github/actions/binstaller-install-script@claude/prd-plan-review-lfh6yw # DEV REF: flip to @verified-actions before merge
+        with:
+          spec: ${{ inputs.binstaller-spec }}
+          version: ${{ env.TAG }}
+
+      # R8/R9/R28: attest the checksummed artifacts (each archive individually)
+      # and install.sh, BEFORE publishing. Single pass, both subjects.
+      - name: Attest artifacts
+        uses: chinmina/.github/.github/actions/attest-artifacts@claude/prd-plan-review-lfh6yw # DEV REF: flip to @verified-actions before merge
+        with:
+          checksums-file: dist/checksums.txt
+          extra-subject-path: ${{ inputs.disable-binstaller && '' || 'install.sh' }}
+
+      # R8 (publish) / R9 / R10 / R17: flip out of draft LAST. A semver
+      # pre-release tag (v1.2.3-rc.1) is marked prerelease; otherwise latest.
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "$TAG" == *-* ]]; then
+            echo "Pre-release tag ${TAG}: publishing as prerelease"
+            gh release edit "$TAG" --draft=false --prerelease
+          else
+            echo "Release tag ${TAG}: publishing as latest"
+            gh release edit "$TAG" --draft=false --latest
+          fi
