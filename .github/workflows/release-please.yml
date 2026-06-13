@@ -102,6 +102,30 @@ jobs:
           config-file: ${{ inputs.config-file }}
           manifest-file: ${{ inputs.manifest-file }}
 
+      # Close a reopened Release PR when its draft release already exists.
+      # release-please only counts PUBLISHED releases as "released" — a draft
+      # does not — so after a Release PR merges and creates a draft, the next
+      # push to the default branch reopens the same-version PR. Detect that and
+      # close it before it causes confusion; the draft publishes downstream once
+      # the tag-triggered release wrapper completes. The `pr` output is a JSON
+      # PullRequest object, so the number/title are pulled out with fromJSON
+      # rather than treated as a bare number.
+      - name: Close Release PR if a draft release already exists
+        if: ${{ steps.release.outputs.release_created != 'true' && steps.release.outputs.pr != '' }}
+        env:
+          GH_TOKEN: ${{ inputs.token-source == 'app' && steps.app-token.outputs.token || steps.octo-sts.outputs.token }}
+          PR_NUMBER: ${{ fromJSON(steps.release.outputs.pr).number }}
+          PR_TITLE: ${{ fromJSON(steps.release.outputs.pr).title }}
+        run: |
+          VERSION=$(echo "$PR_TITLE" | grep -oP '\d+\.\d+\.\d+' || true)
+          if [ -n "$VERSION" ]; then
+            DRAFT=$(gh release view "v${VERSION}" --json isDraft -q '.isDraft' 2>/dev/null || echo "false")
+            if [ "$DRAFT" = "true" ]; then
+              gh pr close "$PR_NUMBER" \
+                --comment "Closing: draft release v${VERSION} already exists and is pending attestation and publication. It will be published automatically once the release workflow completes."
+            fi
+          fi
+
       # R3/R4/L2: release-please created a DRAFT release with no git tag. Push the
       # tag explicitly with the installation token so the push triggers the
       # downstream wrapper. R7: skipped automatically when no release was created.
