@@ -92,6 +92,13 @@ channel never need a secret (keyless OIDC / `github.token`).
       the standard rather than guessing a version.
 - [ ] **release-please config + manifest** (`release-please-config.json`,
       `.release-please-manifest.json`) — repo-specific; see release-please docs.
+      **`release-please-config.json` MUST set `"draft": true`** — this is what
+      makes release-please create the GitHub Release as a draft so the wrapper
+      can build and attest before publishing. Without it the release would be
+      published before any provenance exists; `release-please.yml` validates
+      this config **before release-please runs** and **fails the run** if it is
+      missing (the pinned action has no `draft` input, so the config is the only
+      place to set it).
 - [ ] **binstaller spec** at `.config/binstaller.yml` *(only if binstaller on)*.
 
 #### Declaring `binstaller`
@@ -287,6 +294,12 @@ release wrapper only.
 
 ## Step 3 — Contracts you must not break
 
+- **release-please draft contract**: `release-please-config.json` must set
+  `"draft": true` so release-please creates the GitHub Release as a draft. The
+  pinned action exposes no `draft` input, so this is the only place to set it.
+  `release-please.yml` validates this config before release-please runs and
+  fails the run if it is missing, so a misconfigured repo never publishes a
+  non-draft release.
 - **goreleaser draft contract**: `release.draft: true` + `mode: keep-existing`.
   If goreleaser creates its own release or publishes immediately, the
   attest-before-publish gate is bypassed.
@@ -347,6 +360,7 @@ release wrapper only.
 | octo-sts mint fails | App not installed, central policy not merged, `scope` pointing at the repo instead of the org, or `subject` not environment-qualified | install the App + merge the central policy (1d); keep `scope` = org; set `subject: …:environment:<env>` (2c) |
 | Homebrew step fails to auth on the octo-sts path | `release-tap` policy missing the repo, or repo not in the `claim_pattern.repository` alternation | add the repo to the shared `release-tap` policy (2c) |
 | `uses: chinmina/.github/...` blocked | org policy disallows `chinmina/*` | allow `chinmina/*` in org Actions settings (1c) |
+| `release-please.yml` fails: "… does not enable draft releases" | `release-please-config.json` missing `"draft": true` | add `"draft": true` to `release-please-config.json` (1e) |
 | Release publishes before attestation / no gate | goreleaser not in draft+keep-existing mode | set `release.draft: true` + `mode: keep-existing` (2d) |
 | `setup-release-toolchain` fails: tool not declared | required tool missing from mise config | declare `go`/`goreleaser`/`binstaller` in `.tool-versions` or `mise.toml` (1e) |
 | Publish gate silently absent | `automation`/`release` auto-created ungated | create them with protection rules *before* first run (1a) |

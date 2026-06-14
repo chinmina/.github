@@ -6,6 +6,13 @@
 # an installation token (never GITHUB_TOKEN), the tag push emits a
 # workflow-triggering event that drives the downstream release wrapper (R4).
 #
+# The release MUST be a draft: the wrapper publishes only after attestation, so
+# nothing is downloadable before its provenance exists. release-please-action v4
+# has no `draft` input, so this is set by the consumer's release-please config
+# ("draft": true). The workflow VALIDATES that config before release-please runs
+# and fails loudly if the consumer omitted it — catching the misconfiguration
+# before any non-draft release can be created, rather than after.
+#
 # Token source is selected per consuming repo:
 #   - app      (default): chinmina GitHub App via create-github-app-token.
 #   - octo-sts (keyless):  octo-sts OIDC federation. The job runs in the
@@ -90,6 +97,23 @@ jobs:
           # compromised consumer workflow cannot author its own policy.
           scope: ${{ inputs.sts-scope != '' && inputs.sts-scope || github.repository_owner }}
           identity: ${{ inputs.sts-identity != '' && inputs.sts-identity || format('release-please-{0}', github.event.repository.name) }}
+
+      # Enforce the draft requirement (see header) before release-please runs.
+      # draft may be set globally or on every package.
+      - name: Require draft releases in the release-please config
+        env:
+          GH_TOKEN: ${{ inputs.token-source == 'app' && steps.app-token.outputs.token || steps.octo-sts.outputs.token }}
+          REPO: ${{ github.repository }}
+          CONFIG_FILE: ${{ inputs.config-file }}
+          REF: ${{ github.sha }}
+        run: |
+          config="$(gh api "repos/${REPO}/contents/${CONFIG_FILE}?ref=${REF}" -H "Accept: application/vnd.github.raw")"
+          if ! jq -e '.draft == true or ((.packages // {}) != {} and (.packages | to_entries | all(.value.draft == true)))' <<<"${config}" >/dev/null; then
+            echo "::error::${CONFIG_FILE} does not enable draft releases. Set \"draft\": true (top level, or on every package) so release-please creates a DRAFT release."
+            echo "The release wrapper builds and attests artifacts, then flips the release out of draft LAST; without draft, the release is published and publicly downloadable before any attestation exists."
+            exit 1
+          fi
+          echo "Confirmed ${CONFIG_FILE} enables draft releases."
 
       # R6: if neither mint step produced a token, fail before release-please.
       - name: Release Please
