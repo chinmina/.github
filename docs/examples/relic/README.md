@@ -93,3 +93,9 @@ of the org.
 - Homebrew is off for relic today; the `release-tap` policy is pre-provisioned,
   so enabling it later is just `disable-homebrew:` off + a goreleaser `brews:`
   block pointing at `<org>/homebrew-tap`.
+- relic's own `README.md` needs the standard `## Installation` (mise + install
+  script + manual download blocks — Homebrew off) and `## Verifying releases`
+  sections so users can install and verify the attested artifacts the pipeline
+  ships. See [Step 2e](../../adopting-the-release-pipeline.md#2e-readmemd--install--verify-sections-align-with-what-the-pipeline-ships)
+  and the [`kms-import` README](https://github.com/chinmina/kms-import/blob/main/README.md)
+  exemplar.

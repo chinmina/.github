@@ -290,6 +290,157 @@ Run codegen in `before.hooks` rather than the `pre-build` input when it's a
 normal repo build step — keep `pre-build` for things that genuinely belong to the
 release wrapper only.
 
+### 2e. `README.md` — install + verify sections (align with what the pipeline ships)
+
+The pipeline publishes provenance-attested archives, a binstaller `install.sh`
+(when that channel is on), and the GitHub Release itself. The repo's README is
+the user-facing half of that contract: it must (1) tell users how to install
+from the published channels and (2) tell them how to verify the provenance the
+pipeline went to the trouble of producing. Standardise it so every consumer
+reads the same way.
+
+Use the **[`kms-import` README][kms-readme]** as the worked exemplar — copy its
+`## Installation` and `## Verifying releases` shape and substitute the
+`<PLACEHOLDER>` tokens. The conventions:
+
+- **One collapsible `<details>` block per enabled channel**, each opened by a
+  bold `<summary>`, under a single `## Installation` heading. Include only the
+  channels you actually ship (Step 0.3): **mise** and **manual download** always;
+  **install script** only if binstaller is on; **Homebrew** only if that channel
+  is on; **go install** for a Go module. Mark the recommended one in its summary
+  (e.g. `mise (recommended)`).
+- **A `## Verifying releases` section** that names the attestation (SLSA
+  build-provenance via Sigstore keyless signing — no long-lived key) and gives
+  the `gh attestation verify` command. Every install block that downloads an
+  artifact links to it.
+
+Skeleton (`<TOOL>` = binary/command name, `<OWNER>/<REPO>` = the repo):
+
+````markdown
+## Installation
+
+Pre-built binaries for Linux, macOS, and Windows (amd64/arm64) are published to
+[GitHub Releases](https://github.com/<OWNER>/<REPO>/releases). Every artifact
+carries a build-provenance attestation — see [Verifying releases](#verifying-releases).
+
+<details>
+<summary><strong>mise (recommended)</strong></summary>
+
+[mise](https://mise.jdx.dev/) installs directly from GitHub Releases via its
+[GitHub backend](https://mise.jdx.dev/dev-tools/backends/github.html); it
+verifies the artifact checksum and, with `github_attestations` enabled (the
+current default), its build-provenance attestation:
+
+```sh
+mise use -g github:<OWNER>/<REPO>
+```
+
+</details>
+
+<!-- Install script — ONLY if binstaller is on. -->
+<details>
+<summary><strong>Install script</strong></summary>
+
+Each release ships a self-contained installer (generated with
+[binstaller](https://github.com/binary-install/binstaller)) that detects your
+platform and checks the download against checksums embedded in the script — no
+separate checksum file is fetched:
+
+```sh
+curl -fsSL https://github.com/<OWNER>/<REPO>/releases/latest/download/install.sh | sh
+```
+
+It installs to `~/.local/bin`; pass `-b` for another directory and a tag to pin
+a version:
+
+```sh
+curl -fsSL https://github.com/<OWNER>/<REPO>/releases/latest/download/install.sh \
+  | sh -s -- -b /usr/local/bin <TAG>
+```
+
+The script carries a build-provenance attestation, so you can verify it before
+running it (with an authenticated [GitHub CLI](https://cli.github.com/)). This
+transitively covers the binary too: a verified script is guaranteed to hold the
+genuine checksums it then enforces on the download.
+
+```sh
+curl -fsSL -O https://github.com/<OWNER>/<REPO>/releases/latest/download/install.sh
+gh attestation verify install.sh --repo <OWNER>/<REPO>
+sh install.sh
+```
+
+</details>
+
+<!-- Homebrew — ONLY if the homebrew channel is on. -->
+<details>
+<summary><strong>Homebrew (macOS)</strong></summary>
+
+```sh
+brew install <OWNER>/tap/<TOOL>
+```
+
+</details>
+
+<details>
+<summary><strong>Manual download</strong></summary>
+
+Download the archive for your platform from the
+[releases page](https://github.com/<OWNER>/<REPO>/releases), verify its
+provenance, and put the binary on your `PATH`:
+
+```sh
+OS=linux ARCH=amd64   # or darwin/windows, arm64
+curl -fsSLO "https://github.com/<OWNER>/<REPO>/releases/latest/download/<TOOL>_${OS}_${ARCH}.tar.gz"
+gh attestation verify "<TOOL>_${OS}_${ARCH}.tar.gz" --repo <OWNER>/<REPO>
+tar -xzf "<TOOL>_${OS}_${ARCH}.tar.gz" <TOOL>
+install -m 0755 <TOOL> ~/.local/bin/
+```
+
+Windows archives are `.zip`. See [Verifying releases](#verifying-releases) for
+what the attestation proves and for checksum-only verification.
+
+</details>
+
+<!-- go install — ONLY for a Go module; source builds report version `dev`. -->
+<details>
+<summary><strong>go install</strong></summary>
+
+```sh
+go install github.com/<OWNER>/<REPO>/cmd/<TOOL>@latest
+```
+
+</details>
+
+## Verifying releases
+
+Release artifacts — the binary archives and the generated `install.sh` — carry a
+[build-provenance attestation](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations/using-artifact-attestations-to-establish-provenance-for-builds)
+(SLSA) generated by the release workflow with [Sigstore](https://www.sigstore.dev/)
+keyless signing — there is no long-lived signing key. Each artifact is bound, by
+digest, to the source commit and the workflow that produced it.
+
+To verify a downloaded artifact, install the [GitHub CLI](https://cli.github.com/)
+(≥ 2.49.0) and run:
+
+```sh
+# e.g. ARTIFACT=<TOOL>_linux_amd64.tar.gz
+gh attestation verify "$ARTIFACT" --repo <OWNER>/<REPO>
+```
+
+To additionally pin the signing workflow, add
+`--signer-workflow <OWNER>/<REPO>/.github/workflows/release.yml`. The
+attestation is a Sigstore bundle, so [`cosign`](https://docs.sigstore.dev/) can
+verify it too; `checksums.txt` is still published for
+`sha256sum --check checksums.txt`.
+````
+
+Drop the blocks for channels you don't ship — never document an install path the
+pipeline doesn't publish. The binstaller block's transitive-trust wording (a
+verified script vouches for the binary it installs) is the standard phrasing;
+keep it intact when binstaller is on.
+
+[kms-readme]: https://github.com/chinmina/kms-import/blob/main/README.md
+
 ---
 
 ## Step 3 — Contracts you must not break
