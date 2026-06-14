@@ -213,7 +213,6 @@ jobs:
       disable-npm: <true|false>          # default true — opt in explicitly
       # npm-package-name: "@<OWNER>/<REPO>"  # required when disable-npm: false
       # npm-main-package-dir: ".github/workflows/npm/main"  # default
-      # npm-node-version: "lts/*"                           # default
       # pre-build: "<shell>"             # only if codegen is NOT in goreleaser before.hooks
     secrets: inherit
 ```
@@ -319,9 +318,8 @@ Commit your main npm package at `.github/workflows/npm/main/` (or override
 `npm-main-package-dir`). This directory is project-specific and stays in your
 repo. It must contain:
 
-- **`package.json`** — with `"version": "0.0.0-dev"` (or whatever
-  `npm-version-placeholder` is set to). The action substitutes the release
-  version at publish time. Include `optionalDependencies` referencing the
+- **`package.json`** — with `"version": "0.0.0-dev"` as the version
+  placeholder. The action substitutes the release version at publish time. Include `optionalDependencies` referencing the
   platform packages at the same placeholder version.
 - **`bin/<tool>.js`** — the platform-selecting launcher.
 
@@ -345,8 +343,8 @@ Example `package.json` for a binary with four platform packages:
 }
 ```
 
-Platform packages are generated automatically from `npm-platforms` — you do not
-need to create their directories or package.json files.
+Platform packages are generated automatically from `dist/artifacts.json` — you
+do not need to create their directories or package.json files.
 
 #### Platform packages — automatic discovery
 
