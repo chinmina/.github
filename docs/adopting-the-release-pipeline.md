@@ -21,7 +21,7 @@ Answer these before touching any files. Everything downstream keys off them.
 |---|-----------|---------|---------------|
 | 1 | **Toolchain** | `goreleaser-release.yml` | One wrapper for both Go and Bun projects — goreleaser builds either. Declare the toolchain (`go` and/or `bun`) in mise; the wrapper sets it up automatically. |
 | 2 | **Token source** | `app` / `octo-sts` | **`app`** = a GitHub App installation token (App installed + stored `RELEASE_PLEASE_*` secrets). **`octo-sts`** = keyless OIDC, no stored key, trust policies centralised in the owning organisation's `.github`. Choose per repo based on what the owning organisation has set up — the **chinmina** org uses `app`; another organisation may use `octo-sts`. |
-| 3 | **Channels** | GitHub release (always), binstaller (default on), homebrew (default on), npm (later) | Disable a channel by passing `disable-<channel>: true` to `goreleaser-release.yml`. Each enabled channel that needs a credential is a prerequisite (see Step 1). |
+| 3 | **Channels** | GitHub release (always), binstaller (default on), homebrew (default on), npm (opt-in) | Disable a channel by passing `disable-<channel>: true` to `goreleaser-release.yml`. Each enabled channel that needs a credential is a prerequisite (see Step 1). |
 | 4 | **Repo state** | greenfield / has existing release automation | If the repo already releases via another mechanism, you are **migrating**: the old trigger and the new one must not both run. Disable/delete the old workflow in the same change. |
 
 Record your four answers — later steps say "if `octo-sts` …", "if homebrew on …".
@@ -56,7 +56,7 @@ the caller carries them into the reusable workflow's environment-targeting job.
 | `token-source: app` | `RELEASE_PLEASE_CLIENT_ID` | `automation` |
 | `token-source: app` | `RELEASE_PLEASE_APP_PRIVATE_KEY` | `automation` |
 | homebrew on **and** `token-source: app` | `HOMEBREW_GITHUB_TOKEN` (write to the tap repo) | `release` |
-| npm channel on (later) | `NODE_AUTH_TOKEN` *(or trusted publishing)* | `release` |
+| npm channel on (`disable-npm: false`) | *(none — OIDC trusted publishing; no stored token needed)* | — |
 
 `token-source: octo-sts` stores **no** secret — that is the point. On that path
 even the Homebrew tap write is a keyless mint (the `release-tap` identity), so
@@ -84,8 +84,8 @@ channel never need a secret (keyless OIDC / `github.token`).
 - [ ] **mise config** (`.tool-versions` or `mise.toml`) declares every tool the
       release flow uses — mise is the version authority. **Required:** `go` and
       `goreleaser`; add `binstaller` when that channel is on (it needs a small
-      `mise.toml` block — see [Declaring `binstaller`](#declaring-binstaller)).
-      **Optional:** `bun`
+      `mise.toml` block — see [Declaring `binstaller`](#declaring-binstaller));
+      add `node` when the npm channel is on. **Optional:** `bun`
       (only if the build needs it — declaring it makes the toolchain set Bun up;
       omitting it skips Bun). `setup-release-toolchain` deliberately fails,
       naming the tool, if a *required* tool is not declared — the toolkit imposes
@@ -210,6 +210,10 @@ jobs:
       # Channels: omit a line to keep the default (binstaller + homebrew on).
       disable-binstaller: <true|false>   # default false
       disable-homebrew: <true|false>     # default false
+      disable-npm: <true|false>          # default true — opt in explicitly
+      # npm-package-name: "@<OWNER>/<REPO>"  # required when disable-npm: false
+      # npm-main-package-dir: ".github/workflows/npm/main"  # default
+      # npm-node-version: "lts/*"                           # default
       # pre-build: "<shell>"             # only if codegen is NOT in goreleaser before.hooks
     secrets: inherit
 ```
@@ -290,7 +294,95 @@ Run codegen in `before.hooks` rather than the `pre-build` input when it's a
 normal repo build step — keep `pre-build` for things that genuinely belong to the
 release wrapper only.
 
-### 2e. `README.md` — install + verify sections (align with what the pipeline ships)
+### 2e. npm channel — main package and trusted publisher config
+
+Skip this section if `disable-npm: true` (the default).
+
+The npm channel (R31–R34) uses **OIDC trusted publishing** — no stored token.
+npm exchanges the workflow's OIDC token directly; `NODE_AUTH_TOKEN` must not be
+set. npm attaches provenance automatically during publish (R33). The publish
+logic is bundled in `chinmina/.github`; consumers provide configuration only.
+
+#### OIDC claim matched by npm (R34 — caller filename contract)
+
+npm trusted publishing validates the **caller** workflow's `workflow_ref`, not
+the reusable workflow's `job_workflow_ref`. This means:
+
+- Consumers register their own `release.yml` as the trusted publisher workflow.
+- Publishing from inside `goreleaser-release.yml` works because the OIDC token
+  carries the caller's workflow reference.
+- The caller filename **must stay `release.yml`**. Do not rename it.
+
+#### The main shim package
+
+Commit your main npm package at `.github/workflows/npm/main/` (or override
+`npm-main-package-dir`). This directory is project-specific and stays in your
+repo. It must contain:
+
+- **`package.json`** — with `"version": "0.0.0-dev"` (or whatever
+  `npm-version-placeholder` is set to). The action substitutes the release
+  version at publish time. Include `optionalDependencies` referencing the
+  platform packages at the same placeholder version.
+- **`bin/<tool>.js`** — the platform-selecting launcher.
+
+Example `package.json` for a binary with four platform packages:
+
+```json
+{
+  "name": "@<OWNER>/<REPO>",
+  "version": "0.0.0-dev",
+  "description": "<description>",
+  "license": "MIT",
+  "bin": { "<tool>": "./bin/<tool>.js" },
+  "files": ["bin/<tool>.js", "README.md"],
+  "optionalDependencies": {
+    "@<OWNER>/<REPO>-linux-x64":   "0.0.0-dev",
+    "@<OWNER>/<REPO>-linux-arm64": "0.0.0-dev",
+    "@<OWNER>/<REPO>-darwin-x64":  "0.0.0-dev",
+    "@<OWNER>/<REPO>-darwin-arm64":"0.0.0-dev"
+  },
+  "engines": { "node": ">=18" }
+}
+```
+
+Platform packages are generated automatically from `npm-platforms` — you do not
+need to create their directories or package.json files.
+
+#### Platform packages — automatic discovery
+
+Platform packages are discovered automatically from goreleaser's
+`dist/artifacts.json`, which records every archive it produced along with its
+`goos`, `goarch`, format, and binary name. The action reads this file and
+publishes one npm package per archive — no repetition of goreleaser
+configuration needed. Archive naming convention, platform set, and binary names
+are all derived from what goreleaser actually built.
+
+#### Trusted publisher config on npmjs.com
+
+For **each** package (main and every platform package), add a trusted publisher
+on [npmjs.com](https://www.npmjs.com/) under the package's Settings → Publishing:
+
+| Field | Value |
+|-------|-------|
+| Publisher | GitHub Actions |
+| Organization or user | `<OWNER>` |
+| Repository | `<REPO>` |
+| Workflow filename | `release.yml` |
+| Environment name | `release` |
+
+Every package in the `optionalDependencies` shim must be registered separately —
+the trusted publisher check is per-package.
+
+#### Failure mode: OIDC claim mismatch
+
+If npm rejects the OIDC token with an authentication error, verify that:
+
+- The registered workflow filename is `release.yml` (the caller, not
+  `goreleaser-release.yml`).
+- The environment name is `release` (matching the job's environment).
+- The repository is the consumer repo, not `chinmina/.github`.
+
+### 2f. `README.md` — install + verify sections (align with what the pipeline ships)
 
 The pipeline publishes provenance-attested archives, a binstaller `install.sh`
 (when that channel is on), and the GitHub Release itself. The repo's README is
@@ -516,6 +608,10 @@ keep it intact when binstaller is on.
 | `setup-release-toolchain` fails: tool not declared | required tool missing from mise config | declare `go`/`goreleaser`/`binstaller` in `.tool-versions` or `mise.toml` (1e) |
 | Publish gate silently absent | `automation`/`release` auto-created ungated | create them with protection rules *before* first run (1a) |
 | homebrew step fails on auth | `HOMEBREW_GITHUB_TOKEN` missing/unscoped, or channel left on | add the env-scoped token, or `disable-homebrew: true` (1b/2b) |
+| npm publish fails: "401 Unauthorized" or OIDC rejection | trusted publisher not configured on npmjs.com, wrong workflow filename, wrong environment name, or wrong repo | configure trusted publisher per package with `release.yml` (caller) + `release` env (2e) |
+| npm publish fails: main package dir not found | `npm-main-package-dir` wrong or directory not committed | create `.github/workflows/npm/main/` with `package.json` and bin launcher (2e) |
+| npm publish fails: no archives found | `dist/artifacts.json` missing or no Archive entries | ensure goreleaser ran successfully and produced archives before the npm step |
+| npm publishes to `latest` for a prerelease tag | publish script does not branch on the tag | add a `--tag next` check for tags containing `-` in the publish script (2e) |
 
 ---
 
@@ -526,6 +622,8 @@ keep it intact when binstaller is on.
 `sts-scope` (default org).
 
 `goreleaser-release.yml`: `pre-build`, `disable-binstaller`, `disable-homebrew`,
+`disable-npm` (default `true`), `npm-package-name` (required when npm on),
+`npm-main-package-dir` (default `.github/workflows/npm/main`),
 `binstaller-spec`, `token-source` (`app`\|`octo-sts`), `sts-scope` (default org),
 `sts-release-identity` (default `release-<repo>`), `sts-tap-identity` (default
 `release-tap`). Tool versions (Go, goreleaser, binstaller, optional Bun) are

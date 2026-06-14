@@ -1,4 +1,4 @@
-# Reusable goreleaser release wrapper (PRD reqs R8-R11, R15-R18, R25-R30, R35).
+# Reusable goreleaser release wrapper (PRD reqs R8-R11, R15-R18, R25-R35).
 #
 # Serves both Go and Bun projects -- goreleaser builds either, so there is one
 # wrapper, not a Go/Bun split. Triggered by the consumer on `push` of a v* tag
@@ -74,6 +74,28 @@ on:
         required: false
         type: string
         default: release-tap
+      disable-npm:
+        description: >-
+          Skip npm publication (R31). Defaults to true — consumers opt in
+          explicitly. When false, npm-package-name is required.
+        required: false
+        type: boolean
+        default: true
+      npm-package-name:
+        description: >-
+          npm package name for the main shim (e.g. @jamestelfer/sandy). Platform
+          packages are named by appending -{os}-{cpu}. Required when disable-npm
+          is false.
+        required: false
+        type: string
+        default: ""
+      npm-main-package-dir:
+        description: >-
+          Path to the main shim package directory in the consumer repo. Must
+          contain a package.json with version set to 0.0.0-dev.
+        required: false
+        type: string
+        default: .github/workflows/npm/main
 
 jobs:
   release:
@@ -158,6 +180,32 @@ jobs:
           fi
           echo "Confirmed ${config} sets release.draft and release.use_existing_draft."
 
+      # R31: when npm is on, validate required inputs before goreleaser runs so
+      # misconfiguration fails fast rather than after a full build.
+      - name: Validate npm inputs
+        if: ${{ !inputs.disable-npm }}
+        env:
+          NPM_PACKAGE_NAME: ${{ inputs.npm-package-name }}
+          NPM_MAIN_PACKAGE_DIR: ${{ inputs.npm-main-package-dir }}
+        run: |
+          if [[ -z "$NPM_PACKAGE_NAME" ]]; then
+            echo "::error::npm-package-name is required when disable-npm is false."
+            exit 1
+          fi
+          if [[ ! -d "$NPM_MAIN_PACKAGE_DIR" ]]; then
+            echo "::error::npm-main-package-dir '${NPM_MAIN_PACKAGE_DIR}' not found. Create it or set disable-npm: true."
+            exit 1
+          fi
+          if [[ ! -f "${NPM_MAIN_PACKAGE_DIR}/package.json" ]]; then
+            echo "::error::${NPM_MAIN_PACKAGE_DIR}/package.json not found."
+            exit 1
+          fi
+          if ! mise ls --current --json | jq -e 'has("node")' >/dev/null; then
+            echo "::error::npm channel requires 'node' declared in mise config (mise.toml or .tool-versions)."
+            exit 1
+          fi
+          echo "npm inputs validated: package=${NPM_PACKAGE_NAME}, main-dir=${NPM_MAIN_PACKAGE_DIR}"
+
       # R8 (build): goreleaser fills the existing release-please draft. The tap
       # token writes the formula to the shared tap; the cask/brew itself is
       # configured in goreleaser (R16).
@@ -183,6 +231,18 @@ jobs:
         with:
           checksums-file: dist/checksums.txt
           extra-subject-path: ${{ inputs.disable-binstaller && '' || 'install.sh' }}
+
+      # R31/R32/R33: publish npm packages via OIDC trusted publishing (no stored
+      # token). Runs after goreleaser (dist/ exists) and after attestation, but
+      # before the GitHub release is published — so npm and GitHub provenance
+      # both exist before any artifact is publicly downloadable (R10).
+      - name: Publish npm packages
+        if: ${{ !inputs.disable-npm }}
+        uses: chinmina/.github/.github/actions/npm-publish@verified-actions
+        with:
+          package-name: ${{ inputs.npm-package-name }}
+          main-package-dir: ${{ inputs.npm-main-package-dir }}
+          version: ${{ env.TAG }}
 
       # R8 (publish) / R9 / R10 / R17: flip out of draft LAST. A semver
       # pre-release tag (v1.2.3-rc.1) is marked prerelease; otherwise latest.
