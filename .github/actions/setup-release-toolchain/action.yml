@@ -21,6 +21,9 @@ outputs:
   bun_version:
     description: Bun version resolved from mise (empty when Bun is not declared).
     value: ${{ steps.versions.outputs.bun_version }}
+  node_version:
+    description: Node version resolved from mise (empty when Node is not declared).
+    value: ${{ steps.versions.outputs.node_version }}
 
 runs:
   using: composite
@@ -67,13 +70,15 @@ runs:
           jq -r --arg t "$1" '.[$t][0].requested_version // .[$t][0].version // empty' <<<"$current"
         }
 
-        go_version="$(version_of go)"   # empty unless declared
-        bun_version="$(version_of bun)" # empty unless declared
+        go_version="$(version_of go)"     # empty unless declared
+        bun_version="$(version_of bun)"   # empty unless declared
+        node_version="$(version_of node)" # empty unless declared
         {
           echo "go_version=${go_version}"
           echo "bun_version=${bun_version}"
+          echo "node_version=${node_version}"
         } >> "$GITHUB_OUTPUT"
-        echo "Resolved go=${go_version:-<none>} bun=${bun_version:-<none>}"
+        echo "Resolved go=${go_version:-<none>} bun=${bun_version:-<none>} node=${node_version:-<none>}"
 
     # Go via setup-go (module/build caching), version from mise — only when the
     # repo declares Go (R18).
@@ -89,3 +94,12 @@ runs:
       uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       with:
         bun-version: ${{ steps.versions.outputs.bun_version }}
+
+    # Node via setup-node, version from mise — only when the repo declares Node.
+    # registry-url is not set here; the npm-publish action sets it when needed
+    # so that credential configuration is scoped to the publish step only.
+    - name: Set up Node
+      if: ${{ steps.versions.outputs.node_version != '' }}
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      with:
+        node-version: ${{ steps.versions.outputs.node_version }}
