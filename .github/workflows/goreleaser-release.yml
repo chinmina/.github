@@ -136,6 +136,28 @@ jobs:
           scope: ${{ inputs.sts-scope != '' && inputs.sts-scope || github.repository_owner }}
           identity: ${{ inputs.sts-tap-identity }}
 
+      # release.draft and release.use_existing_draft must both be set so
+      # goreleaser fills release-please's existing draft instead of creating a
+      # second release.
+      - name: Require use_existing_draft in the goreleaser config
+        run: |
+          config=""
+          for candidate in .config/goreleaser.yml .config/goreleaser.yaml .goreleaser.yml .goreleaser.yaml goreleaser.yml goreleaser.yaml; do
+            if [[ -f "${candidate}" ]]; then
+              config="${candidate}"
+              break
+            fi
+          done
+          if [[ -z "${config}" ]]; then
+            echo "::error::No goreleaser config found. Add one that sets release.draft: true and release.use_existing_draft: true."
+            exit 1
+          fi
+          if [[ "$(yq '(.release.draft == true) and (.release.use_existing_draft == true)' "${config}")" != "true" ]]; then
+            echo "::error::${config} must set release.draft: true and release.use_existing_draft: true. Both are required so the release-please draft is reused instead of a second release being created."
+            exit 1
+          fi
+          echo "Confirmed ${config} sets release.draft and release.use_existing_draft."
+
       # R8 (build): goreleaser fills the existing release-please draft. The tap
       # token writes the formula to the shared tap; the cask/brew itself is
       # configured in goreleaser (R16).
