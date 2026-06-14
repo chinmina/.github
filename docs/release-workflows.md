@@ -136,6 +136,7 @@ flowchart TB
 | **Secrets** | via `inherit`: `HOMEBREW_GITHUB_TOKEN` (App path + homebrew only; octo-sts mints the tap token instead) |
 | **Job env** | `release` |
 | **Permissions** | `contents: write`, `id-token: write`, `attestations: write` |
+| **Consumer release-please** | `release-please-config.json` must set `"draft": true` (validated by `release-please.yml` before it runs; the pinned action has no `draft` input) |
 | **Consumer goreleaser** | `release.draft: true`, keep-existing mode; codegen in `before.hooks` |
 
 ## Quality gate
