@@ -26,19 +26,13 @@ inputs:
   main-package-dir:
     description: >-
       Path to the main shim package directory (relative to repo root). Must
-      contain a package.json with version set to version-placeholder.
+      contain a package.json with a name and optionalDependencies.
     required: false
     default: .github/workflows/npm/main
   readme:
     description: Path to the README to copy into the main package before publishing.
     required: false
     default: README.md
-  version-placeholder:
-    description: >-
-      Version placeholder string in package.json files, replaced with the
-      release version at publish time.
-    required: false
-    default: 0.0.0-dev
   version:
     description: Release tag (e.g. v1.2.3). Leading v is stripped internally.
     required: true
@@ -69,12 +63,12 @@ runs:
         ARTIFACTS_JSON: ${{ inputs.artifacts-json }}
         MAIN_PACKAGE_DIR: ${{ inputs.main-package-dir }}
         README: ${{ inputs.readme }}
-        VERSION_PLACEHOLDER: ${{ inputs.version-placeholder }}
         VERSION: ${{ inputs.version }}
         # NODE_AUTH_TOKEN is intentionally absent: trusted publishing supplies
         # credentials via the OIDC token exchanged by npm itself.
       run: |
         VERSION="${VERSION#v}"
+        repo_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
 
         # Fixed mappings from goreleaser names to npm field values.
         npm_os() {
@@ -132,7 +126,8 @@ runs:
             --arg os      "${os}"       \
             --arg cpu     "${cpu}"      \
             --arg binary  "${binary}"   \
-            '{"name":$name,"version":$version,"os":[$os],"cpu":[$cpu],"files":[$binary],"license":"MIT"}' \
+            --arg repo    "${repo_url}" \
+            '{"name":$name,"version":$version,"os":[$os],"cpu":[$cpu],"files":[$binary],"license":"MIT","repository":{"type":"git","url":$repo}}' \
             > "${tmpdir}/package.json"
 
           npm publish --access public "${tag_args[@]+"${tag_args[@]}"}" "${tmpdir}"
@@ -154,6 +149,15 @@ runs:
         tmpdir="$(make_tmpdir)"
         cp -r "${MAIN_PACKAGE_DIR}/." "${tmpdir}/"
         [[ -f "${README}" ]] && cp "${README}" "${tmpdir}/README.md"
-        sed -i "s|${VERSION_PLACEHOLDER}|${VERSION}|g" "${tmpdir}/package.json"
+        # Set version, update all optionalDependency versions, and set
+        # repository in one jq pass — no placeholder string needed.
+        jq \
+          --arg version "${VERSION}" \
+          --arg repo "${repo_url}" \
+          '.version = $version
+          | .optionalDependencies = (.optionalDependencies // {} | map_values($version))
+          | .repository = {"type":"git","url":$repo}' \
+          "${tmpdir}/package.json" > "${tmpdir}/package.json.tmp"
+        mv "${tmpdir}/package.json.tmp" "${tmpdir}/package.json"
         npm publish --access public "${tag_args[@]+"${tag_args[@]}"}" "${tmpdir}"
         echo "published ${PACKAGE_NAME}@${VERSION}"
