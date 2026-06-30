@@ -26,7 +26,8 @@ inputs:
   main-package-dir:
     description: >-
       Path to the main shim package directory (relative to repo root). Must
-      contain a package.json with a name and optionalDependencies.
+      contain a package.json with a name and any other necessary information.
+      Repository, version and optionalDependencies will be replaced.
     required: false
     default: .github/workflows/npm/main
   readme:
