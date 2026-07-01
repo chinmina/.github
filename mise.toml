@@ -6,3 +6,6 @@ actionlint = "1.7.12"
 shellcheck = "0.11.0"
 shfmt = "3.13.1"
 zizmor = "1.25.2"
+# Bun runs the npm-publish action's TypeScript generation + `bun test` +
+# `tsc --noEmit` type check. Node 24 is provided by the CI runner / setup-node.
+bun = "1.3.14"

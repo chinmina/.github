@@ -1,7 +1,0 @@
-{
-  "name": "@jamestelfer/tool",
-  "description": "A helpful tool",
-  "homepage": "https://example.com/tool",
-  "license": "MIT",
-  "keywords": ["cli", "tool"]
-}

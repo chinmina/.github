@@ -84,9 +84,11 @@ channel never need a secret (keyless OIDC / `github.token`).
 - [ ] **mise config** (`.tool-versions` or `mise.toml`) declares every tool the
       release flow uses — mise is the version authority. **Required:** `go` and
       `goreleaser`; add `binstaller` when that channel is on (it needs a small
-      `mise.toml` block — see [Declaring `binstaller`](#declaring-binstaller));
-      add `node` when the npm channel is on. **Optional:** `bun`
-      (only if the build needs it — declaring it makes the toolchain set Bun up;
+      `mise.toml` block — see [Declaring `binstaller`](#declaring-binstaller)).
+      The npm channel needs **no** extra tool: the `npm-publish` action pins its
+      own Node 24 + Bun for generation and publishing, independent of your build
+      toolchain. **Optional:** `bun`
+      (only if the *build* needs it — declaring it makes the toolchain set Bun up;
       omitting it skips Bun). `setup-release-toolchain` deliberately fails,
       naming the tool, if a *required* tool is not declared — the toolkit imposes
       the standard rather than guessing a version.
