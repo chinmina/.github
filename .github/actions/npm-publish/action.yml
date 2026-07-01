@@ -3,8 +3,12 @@ description: >-
   Publish platform-specific and main npm packages using OIDC trusted publishing
   (no stored token). Reads goreleaser's dist/artifacts.json to discover archives,
   platforms, and binary names — no repetition of goreleaser configuration needed.
-  Generates minimal platform package.json files; uses the consumer's main shim
-  package directory for the project-specific package.json and bin launcher.
+  Generates minimal platform package.json files and derives the main package
+  from the consumer's package.json; the platform-selecting launcher is hosted
+  here and copied in, so consumers ship no launcher.
+
+  The action pins its own Node 24 + Bun toolchain for generation/publishing,
+  independent of the consumer build toolchain.
 
   npm provenance is produced automatically under trusted publishing. Do NOT set
   NODE_AUTH_TOKEN — credentials are supplied via the OIDC token.
@@ -25,9 +29,10 @@ inputs:
     default: dist/artifacts.json
   main-package-dir:
     description: >-
-      Path to the main shim package directory (relative to repo root). Must
-      contain a package.json with a name and any other necessary information.
-      Repository, version and optionalDependencies will be replaced.
+      Path to the main package directory (relative to repo root). Must contain a
+      package.json with a non-empty name. version, repository, bin,
+      optionalDependencies and the chinmina launcher map are derived by the
+      action; files is unioned and engines set when absent. No launcher needed.
     required: false
     default: .github/workflows/npm/main
   readme:
@@ -41,25 +46,46 @@ inputs:
 runs:
   using: composite
   steps:
-    # Node version is set by setup-release-toolchain (from mise). This call
-    # only configures the registry endpoint in .npmrc for trusted publishing;
-    # it does not change the Node version already on PATH.
-    - name: Configure npm registry
-      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+    # This action pins its OWN toolchain (Node 24 + Bun latest) for generation
+    # and publishing, independent of the consumer's mise config: the versions
+    # used to build/publish the npm package need not match the project's build
+    # toolchain. setup-node also writes the registry endpoint into .npmrc for
+    # trusted publishing. Node 24 ships an npm new enough for OIDC.
+    - name: Set up Node for npm publish
+      uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
       with:
+        node-version: "24"
         registry-url: https://registry.npmjs.org
 
-    # Ensure npm supports OIDC trusted publishing. npm ≥ 9.5.0 is required;
-    # runners ship an older bundled npm, so we upgrade unconditionally.
+    # Bun runs the TypeScript generation/orchestration (publish.ts). It packs
+    # each tarball directory; the actual publish is `npm publish` because npm
+    # OIDC trusted publishing (provenance, no stored token) is an npm-CLI
+    # feature — Bun never publishes.
+    - name: Set up Bun
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      with:
+        bun-version: latest
+
+    # Install the action's own dependencies (zod) from the committed lockfile.
+    - name: Install action dependencies
+      shell: bash --noprofile --norc -euo pipefail {0}
+      working-directory: ${{ github.action_path }}
+      run: bun install --frozen-lockfile
+
+    # Ensure npm supports OIDC trusted publishing (npm ≥ 11.5.1). Node 24 ships
+    # a recent npm, but upgrade unconditionally to stay ahead of runner drift.
     - name: Ensure npm supports trusted publishing
       shell: bash --noprofile --norc -euo pipefail {0}
       run: npm install -g npm@latest
 
+    # publish.ts validates ALL consumer input up front (fail-fast, before the
+    # first publish), then publishes each platform package and the main shim.
     # All inputs flow through env — never template-expanded into script text —
-    # to avoid injection from consumer-supplied values (R15).
+    # to avoid injection from consumer-supplied values.
     - name: Publish npm packages
       shell: bash --noprofile --norc -euo pipefail {0}
       env:
+        ACTION_PATH: ${{ github.action_path }}
         PACKAGE_NAME: ${{ inputs.package-name }}
         ARTIFACTS_JSON: ${{ inputs.artifacts-json }}
         MAIN_PACKAGE_DIR: ${{ inputs.main-package-dir }}
@@ -67,98 +93,4 @@ runs:
         VERSION: ${{ inputs.version }}
         # NODE_AUTH_TOKEN is intentionally absent: trusted publishing supplies
         # credentials via the OIDC token exchanged by npm itself.
-      run: |
-        VERSION="${VERSION#v}"
-        repo_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
-
-        # Fixed mappings from goreleaser names to npm field values.
-        npm_os() {
-          case "$1" in
-            linux)   echo linux  ;;
-            darwin)  echo darwin ;;
-            windows) echo win32  ;;
-            *) echo "::error title=npm-publish::unknown goos '${1}'" >&2; exit 1 ;;
-          esac
-        }
-        npm_cpu() {
-          case "$1" in
-            amd64) echo x64   ;;
-            arm64) echo arm64 ;;
-            386)   echo ia32  ;;
-            arm)   echo arm   ;;
-            *) echo "::error title=npm-publish::unknown goarch '${1}'" >&2; exit 1 ;;
-          esac
-        }
-
-        TMPDIRS=()
-        cleanup() {
-          for d in "${TMPDIRS[@]+"${TMPDIRS[@]}"}"; do rm -rf "${d}"; done
-        }
-        trap cleanup EXIT
-        make_tmpdir() { local d; d="$(mktemp -d)"; TMPDIRS+=("${d}"); echo "${d}"; }
-
-        tag_args=()
-        if [[ "${VERSION}" == *-* ]]; then
-          tag_args=(--tag next)
-        fi
-
-        # Publish one platform package per Archive entry in artifacts.json.
-        # jq maps goreleaser fields to npm equivalents; binary name and archive
-        # format come from extra so the naming convention is irrelevant.
-        # Entries with no Binaries (e.g. source archives) are excluded.
-        archive_count=0
-        while IFS=$'\t' read -r archive_path archive_format goos goarch binary; do
-          archive_count=$((archive_count + 1))
-          os="$(npm_os "${goos}")"
-          cpu="$(npm_cpu "${goarch}")"
-          pkg_name="${PACKAGE_NAME}-${os}-${cpu}"
-          tmpdir="$(make_tmpdir)"
-
-          if [[ "${archive_format}" == "zip" ]]; then
-            unzip -j "${archive_path}" "${binary}" -d "${tmpdir}"
-          else
-            tar -xzf "${archive_path}" -C "${tmpdir}" "${binary}"
-          fi
-          chmod +x "${tmpdir}/${binary}"
-
-          jq -n \
-            --arg name    "${pkg_name}" \
-            --arg version "${VERSION}"  \
-            --arg os      "${os}"       \
-            --arg cpu     "${cpu}"      \
-            --arg binary  "${binary}"   \
-            --arg repo    "${repo_url}" \
-            '{"name":$name,"version":$version,"os":[$os],"cpu":[$cpu],"files":[$binary],"license":"MIT","repository":{"type":"git","url":$repo}}' \
-            > "${tmpdir}/package.json"
-
-          npm publish --access public "${tag_args[@]+"${tag_args[@]}"}" "${tmpdir}"
-          echo "published ${pkg_name}@${VERSION}"
-        done < <(jq -r '
-          .[]
-          | select(.type == "Archive" and (.extra.Binaries | length) > 0)
-          | [.path, .extra.Format, .goos, .goarch, .extra.Binaries[0]]
-          | @tsv
-        ' "${ARTIFACTS_JSON}")
-
-        if [[ "${archive_count}" -eq 0 ]]; then
-          echo "::error title=npm-publish::no Archive entries found in ${ARTIFACTS_JSON}. Ensure goreleaser produced archives before the npm step." >&2
-          exit 1
-        fi
-
-        # Publish the main shim last (its optionalDependencies reference the
-        # platform packages published above).
-        tmpdir="$(make_tmpdir)"
-        cp -r "${MAIN_PACKAGE_DIR}/." "${tmpdir}/"
-        [[ -f "${README}" ]] && cp "${README}" "${tmpdir}/README.md"
-        # Set version, update all optionalDependency versions, and set
-        # repository in one jq pass — no placeholder string needed.
-        jq \
-          --arg version "${VERSION}" \
-          --arg repo "${repo_url}" \
-          '.version = $version
-          | .optionalDependencies = (.optionalDependencies // {} | map_values($version))
-          | .repository = {"type":"git","url":$repo}' \
-          "${tmpdir}/package.json" > "${tmpdir}/package.json.tmp"
-        mv "${tmpdir}/package.json.tmp" "${tmpdir}/package.json"
-        npm publish --access public "${tag_args[@]+"${tag_args[@]}"}" "${tmpdir}"
-        echo "published ${PACKAGE_NAME}@${VERSION}"
+      run: bun run "${ACTION_PATH}/src/publish.ts"
