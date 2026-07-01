@@ -1,0 +1,45 @@
+[
+  {
+    "name": "tool_linux_x86_64.tar.gz",
+    "path": "dist/tool_linux_x86_64.tar.gz",
+    "type": "Archive",
+    "goos": "linux",
+    "goarch": "amd64",
+    "extra": { "Format": "tar.gz", "Binaries": ["tool"] }
+  },
+  {
+    "name": "tool_darwin_arm64.tar.gz",
+    "path": "dist/tool_darwin_arm64.tar.gz",
+    "type": "Archive",
+    "goos": "darwin",
+    "goarch": "arm64",
+    "extra": { "Format": "tar.gz", "Binaries": ["tool"] }
+  },
+  {
+    "name": "tool_windows_x86_64.zip",
+    "path": "dist/tool_windows_x86_64.zip",
+    "type": "Archive",
+    "goos": "windows",
+    "goarch": "amd64",
+    "extra": { "Format": "zip", "Binaries": ["tool.exe"] }
+  },
+  {
+    "name": "tool_windows_arm64.zip",
+    "path": "dist/tool_windows_arm64.zip",
+    "type": "Archive",
+    "goos": "windows",
+    "goarch": "arm64",
+    "extra": { "Format": "zip", "Binaries": ["tool.exe"] }
+  },
+  {
+    "name": "tool_source.tar.gz",
+    "path": "dist/tool_source.tar.gz",
+    "type": "Source",
+    "extra": { "Format": "tar.gz" }
+  },
+  {
+    "name": "checksums.txt",
+    "path": "dist/checksums.txt",
+    "type": "Checksum"
+  }
+]

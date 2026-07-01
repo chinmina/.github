@@ -55,11 +55,28 @@ runs:
       shell: bash --noprofile --norc -euo pipefail {0}
       run: npm install -g npm@latest
 
+    # Fail-fast preflight: validate ALL consumer input before the first
+    # `npm publish` so a bad input cannot leave a half-published release.
+    # Checks main package.json presence + non-empty name, at least one
+    # qualifying Archive, and that every goos/goarch has a known Node mapping.
+    - name: Validate npm inputs (preflight)
+      shell: bash --noprofile --norc -euo pipefail {0}
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        ARTIFACTS_JSON: ${{ inputs.artifacts-json }}
+        MAIN_PACKAGE_DIR: ${{ inputs.main-package-dir }}
+      run: |
+        node "${ACTION_PATH}/bin/preflight.js" \
+          "${MAIN_PACKAGE_DIR}/package.json" "${ARTIFACTS_JSON}"
+
     # All inputs flow through env — never template-expanded into script text —
-    # to avoid injection from consumer-supplied values (R15).
+    # to avoid injection from consumer-supplied values (R15). All goreleaser
+    # -> npm mapping and package.json generation live in tested Node scripts
+    # under bin/; this shell only extracts binaries and calls `npm publish`.
     - name: Publish npm packages
       shell: bash --noprofile --norc -euo pipefail {0}
       env:
+        ACTION_PATH: ${{ github.action_path }}
         PACKAGE_NAME: ${{ inputs.package-name }}
         ARTIFACTS_JSON: ${{ inputs.artifacts-json }}
         MAIN_PACKAGE_DIR: ${{ inputs.main-package-dir }}
@@ -67,98 +84,4 @@ runs:
         VERSION: ${{ inputs.version }}
         # NODE_AUTH_TOKEN is intentionally absent: trusted publishing supplies
         # credentials via the OIDC token exchanged by npm itself.
-      run: |
-        VERSION="${VERSION#v}"
-        repo_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
-
-        # Fixed mappings from goreleaser names to npm field values.
-        npm_os() {
-          case "$1" in
-            linux)   echo linux  ;;
-            darwin)  echo darwin ;;
-            windows) echo win32  ;;
-            *) echo "::error title=npm-publish::unknown goos '${1}'" >&2; exit 1 ;;
-          esac
-        }
-        npm_cpu() {
-          case "$1" in
-            amd64) echo x64   ;;
-            arm64) echo arm64 ;;
-            386)   echo ia32  ;;
-            arm)   echo arm   ;;
-            *) echo "::error title=npm-publish::unknown goarch '${1}'" >&2; exit 1 ;;
-          esac
-        }
-
-        TMPDIRS=()
-        cleanup() {
-          for d in "${TMPDIRS[@]+"${TMPDIRS[@]}"}"; do rm -rf "${d}"; done
-        }
-        trap cleanup EXIT
-        make_tmpdir() { local d; d="$(mktemp -d)"; TMPDIRS+=("${d}"); echo "${d}"; }
-
-        tag_args=()
-        if [[ "${VERSION}" == *-* ]]; then
-          tag_args=(--tag next)
-        fi
-
-        # Publish one platform package per Archive entry in artifacts.json.
-        # jq maps goreleaser fields to npm equivalents; binary name and archive
-        # format come from extra so the naming convention is irrelevant.
-        # Entries with no Binaries (e.g. source archives) are excluded.
-        archive_count=0
-        while IFS=$'\t' read -r archive_path archive_format goos goarch binary; do
-          archive_count=$((archive_count + 1))
-          os="$(npm_os "${goos}")"
-          cpu="$(npm_cpu "${goarch}")"
-          pkg_name="${PACKAGE_NAME}-${os}-${cpu}"
-          tmpdir="$(make_tmpdir)"
-
-          if [[ "${archive_format}" == "zip" ]]; then
-            unzip -j "${archive_path}" "${binary}" -d "${tmpdir}"
-          else
-            tar -xzf "${archive_path}" -C "${tmpdir}" "${binary}"
-          fi
-          chmod +x "${tmpdir}/${binary}"
-
-          jq -n \
-            --arg name    "${pkg_name}" \
-            --arg version "${VERSION}"  \
-            --arg os      "${os}"       \
-            --arg cpu     "${cpu}"      \
-            --arg binary  "${binary}"   \
-            --arg repo    "${repo_url}" \
-            '{"name":$name,"version":$version,"os":[$os],"cpu":[$cpu],"files":[$binary],"license":"MIT","repository":{"type":"git","url":$repo}}' \
-            > "${tmpdir}/package.json"
-
-          npm publish --access public "${tag_args[@]+"${tag_args[@]}"}" "${tmpdir}"
-          echo "published ${pkg_name}@${VERSION}"
-        done < <(jq -r '
-          .[]
-          | select(.type == "Archive" and (.extra.Binaries | length) > 0)
-          | [.path, .extra.Format, .goos, .goarch, .extra.Binaries[0]]
-          | @tsv
-        ' "${ARTIFACTS_JSON}")
-
-        if [[ "${archive_count}" -eq 0 ]]; then
-          echo "::error title=npm-publish::no Archive entries found in ${ARTIFACTS_JSON}. Ensure goreleaser produced archives before the npm step." >&2
-          exit 1
-        fi
-
-        # Publish the main shim last (its optionalDependencies reference the
-        # platform packages published above).
-        tmpdir="$(make_tmpdir)"
-        cp -r "${MAIN_PACKAGE_DIR}/." "${tmpdir}/"
-        [[ -f "${README}" ]] && cp "${README}" "${tmpdir}/README.md"
-        # Set version, update all optionalDependency versions, and set
-        # repository in one jq pass — no placeholder string needed.
-        jq \
-          --arg version "${VERSION}" \
-          --arg repo "${repo_url}" \
-          '.version = $version
-          | .optionalDependencies = (.optionalDependencies // {} | map_values($version))
-          | .repository = {"type":"git","url":$repo}' \
-          "${tmpdir}/package.json" > "${tmpdir}/package.json.tmp"
-        mv "${tmpdir}/package.json.tmp" "${tmpdir}/package.json"
-        npm publish --access public "${tag_args[@]+"${tag_args[@]}"}" "${tmpdir}"
-        echo "published ${PACKAGE_NAME}@${VERSION}"
+      run: bash "${ACTION_PATH}/bin/publish.sh"

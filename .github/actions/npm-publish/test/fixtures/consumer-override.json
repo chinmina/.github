@@ -1,0 +1,6 @@
+{
+  "name": "@jamestelfer/tool",
+  "description": "A helpful tool",
+  "license": "MIT",
+  "chinmina": { "command": "mytool" }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "@jamestelfer/tool",
+  "description": "A helpful tool",
+  "license": "MIT",
+  "version": "0.0.0-dev",
+  "engines": { "node": ">=20" },
+  "files": ["extra.txt", "README.md"],
+  "optionalDependencies": {
+    "@jamestelfer/tool-win32-x64": "0.0.0-dev",
+    "junk": "1.2.3"
+  },
+  "repository": { "type": "git", "url": "https://example.com/old" }
+}
