@@ -1,0 +1,34 @@
+[
+  {
+    "name": "tool_linux_x86_64.tar.gz",
+    "path": "dist/tool_linux_x86_64.tar.gz",
+    "type": "Archive",
+    "goos": "linux",
+    "goarch": "amd64",
+    "extra": { "Format": "tar.gz", "Binaries": ["tool"] }
+  },
+  {
+    "name": "tool_linux_arm64.tar.gz",
+    "path": "dist/tool_linux_arm64.tar.gz",
+    "type": "Archive",
+    "goos": "linux",
+    "goarch": "arm64",
+    "extra": { "Format": "tar.gz", "Binaries": ["tool"] }
+  },
+  {
+    "name": "tool_darwin_x86_64.tar.gz",
+    "path": "dist/tool_darwin_x86_64.tar.gz",
+    "type": "Archive",
+    "goos": "darwin",
+    "goarch": "amd64",
+    "extra": { "Format": "tar.gz", "Binaries": ["tool"] }
+  },
+  {
+    "name": "tool_darwin_arm64.tar.gz",
+    "path": "dist/tool_darwin_arm64.tar.gz",
+    "type": "Archive",
+    "goos": "darwin",
+    "goarch": "arm64",
+    "extra": { "Format": "tar.gz", "Binaries": ["tool"] }
+  }
+]

@@ -84,9 +84,11 @@ channel never need a secret (keyless OIDC / `github.token`).
 - [ ] **mise config** (`.tool-versions` or `mise.toml`) declares every tool the
       release flow uses — mise is the version authority. **Required:** `go` and
       `goreleaser`; add `binstaller` when that channel is on (it needs a small
-      `mise.toml` block — see [Declaring `binstaller`](#declaring-binstaller));
-      add `node` when the npm channel is on. **Optional:** `bun`
-      (only if the build needs it — declaring it makes the toolchain set Bun up;
+      `mise.toml` block — see [Declaring `binstaller`](#declaring-binstaller)).
+      The npm channel needs **no** extra tool: the `npm-publish` action pins its
+      own Node 24 + Bun for generation and publishing, independent of your build
+      toolchain. **Optional:** `bun`
+      (only if the *build* needs it — declaring it makes the toolchain set Bun up;
       omitting it skips Bun). `setup-release-toolchain` deliberately fails,
       naming the tool, if a *required* tool is not declared — the toolkit imposes
       the standard rather than guessing a version.
@@ -312,36 +314,90 @@ the reusable workflow's `job_workflow_ref`. This means:
   carries the caller's workflow reference.
 - The caller filename **must stay `release.yml`**. Do not rename it.
 
-#### The main shim package
+#### The main package — consumer contract
 
 Commit your main npm package at `.github/workflows/npm/main/` (or override
 `npm-main-package-dir`). This directory is project-specific and stays in your
-repo. It must contain:
+repo. Its **only required file is a single `package.json` carrying your
+consumer-owned metadata**. You do **not** ship a launcher, and you do **not**
+need to declare `version`, `repository`, `engines`, or `optionalDependencies` —
+the action is the single source of truth for all of those.
 
-- **`package.json`** — with `"version": "0.0.0-dev"` as the version
-  placeholder. The action substitutes the release version at publish time. Include `optionalDependencies` referencing the
-  platform packages at the same placeholder version.
-- **`bin/<tool>.js`** — the platform-selecting launcher.
+The action derives fields as follows when it publishes:
 
-Example `package.json` for a binary with four platform packages:
+| Field | Behaviour |
+|-------|-----------|
+| `version` | **Overwritten** with the release tag (leading `v` stripped). |
+| `repository` | **Overwritten** from the GitHub repository. |
+| `bin` | **Overwritten** to a single entry mapping the command name to the hosted launcher. |
+| `optionalDependencies` | **Overwritten** to exactly the discovered platform packages, pinned to the release version. Any value you supply is ignored. |
+| `files` | **Union** of the default set (launcher + `README.md`) and your entries. |
+| `engines` | Set to `{"node":">=18"}` **only when absent**; left as-is when present. |
+| `chinmina` | **Overwritten** with the runtime `platforms` map that drives the launcher. |
+| `name` | **Overwritten** with the `npm-package-name` input, so the main package always matches the platform family it references. Your `package.json` must still carry a (non-empty) `name` to be a valid manifest, but its value is ignored. |
+| `description`, `homepage`, `license`, `keywords` | **Left untouched** — yours. |
+
+`name` is derived from the `npm-package-name` workflow input — the single source
+of truth for the whole package family (main + platform packages). Keep the
+`name` in your `package.json` consistent with it to avoid confusion, but the
+action overrides it regardless so a stale value cannot publish a mismatched
+package.
+
+The command name defaults to the package's **unscoped** name (e.g. `tool` for
+`@<OWNER>/tool`). To use a different command name, set `chinmina.command` in
+your source `package.json`.
+
+Minimal `package.json` the action accepts:
 
 ```json
 {
   "name": "@<OWNER>/<REPO>",
-  "version": "0.0.0-dev",
   "description": "<description>",
+  "homepage": "https://github.com/<OWNER>/<REPO>",
   "license": "MIT",
-  "bin": { "<tool>": "./bin/<tool>.js" },
-  "files": ["bin/<tool>.js", "README.md"],
-  "optionalDependencies": {
-    "@<OWNER>/<REPO>-linux-x64":   "0.0.0-dev",
-    "@<OWNER>/<REPO>-linux-arm64": "0.0.0-dev",
-    "@<OWNER>/<REPO>-darwin-x64":  "0.0.0-dev",
-    "@<OWNER>/<REPO>-darwin-arm64":"0.0.0-dev"
-  },
-  "engines": { "node": ">=18" }
+  "keywords": ["cli"]
 }
 ```
+
+That is enough: the action fills in `version`, `repository`, `bin`,
+`optionalDependencies`, `files`, `engines`, and the launcher itself.
+
+#### The launcher is hosted — you no longer ship one
+
+The platform-selecting launcher is a single generic file hosted in
+`chinmina/.github` and copied into your published package at release time. It is
+fully data-driven: it reads the `chinmina.platforms` map the action writes into
+your package's `package.json`, resolves the correct platform package for the
+current `process.platform`/`process.arch`, execs the binary with all arguments
+and stdio forwarded, and exits with the binary's exit code. It contains no
+hard-coded package names and no `.exe` special-casing.
+
+Because the map is generated from `dist/artifacts.json` at publish time, the
+launcher can never drift out of sync with the published platform-package names
+(the class of bug that produced `-win32-` launcher references against
+`-windows-` packages).
+
+#### Migrating an existing consumer
+
+If your repo predates the hosted launcher (it has a `bin/<tool>.js` and a
+fully-specified `package.json`), migrate the `main/` directory as follows:
+
+1. **Delete the local launcher**: remove `bin/<tool>.js` (and the now-empty
+   `bin/` directory). The hosted launcher replaces it.
+2. **Clear `optionalDependencies`** (recommended): the action overwrites it
+   from `dist/artifacts.json`, so any local copy only drifts. Remove the block.
+3. **Drop derived fields** (optional but tidy): you may delete `version`,
+   `repository`, and `bin`; the action overwrites them regardless. Keep
+   `engines` only if you need a value other than the `>=18` default.
+4. **Keep your metadata**: `name`, `description`, `homepage`, `license`,
+   `keywords`, and any custom `files` entries are preserved.
+5. **Optional command-name override**: if your command name differs from the
+   unscoped package name, add `"chinmina": { "command": "<name>" }`.
+
+After migration the directory typically contains just a `package.json` matching
+the minimal shape above. The action's preflight step validates this before any
+package is published, so a bad `main/package.json` fails fast with zero
+`npm publish` calls.
 
 Platform packages are generated automatically from `dist/artifacts.json` — you
 do not need to create their directories or package.json files.
@@ -607,9 +663,9 @@ keep it intact when binstaller is on.
 | Publish gate silently absent | `automation`/`release` auto-created ungated | create them with protection rules *before* first run (1a) |
 | homebrew step fails on auth | `HOMEBREW_GITHUB_TOKEN` missing/unscoped, or channel left on | add the env-scoped token, or `disable-homebrew: true` (1b/2b) |
 | npm publish fails: "401 Unauthorized" or OIDC rejection | trusted publisher not configured on npmjs.com, wrong workflow filename, wrong environment name, or wrong repo | configure trusted publisher per package with `release.yml` (caller) + `release` env (2e) |
-| npm publish fails: main package dir not found | `npm-main-package-dir` wrong or directory not committed | create `.github/workflows/npm/main/` with `package.json` and bin launcher (2e) |
-| npm publish fails: no archives found | `dist/artifacts.json` missing or no Archive entries | ensure goreleaser ran successfully and produced archives before the npm step |
-| npm publishes to `latest` for a prerelease tag | publish script does not branch on the tag | add a `--tag next` check for tags containing `-` in the publish script (2e) |
+| npm preflight fails: main package.json missing/nameless | `npm-main-package-dir` wrong, directory not committed, or `package.json` lacks a `name` | commit `.github/workflows/npm/main/package.json` with consumer metadata (2e); no launcher needed |
+| npm preflight fails: no archives found | `dist/artifacts.json` missing or no qualifying Archive entries | ensure goreleaser ran successfully and produced archives before the npm step |
+| npm publish fails: unknown goos/goarch | goreleaser targets a platform with no Node mapping | preflight fails before any publish; remove the target or extend the mapping in the `npm-publish` action |
 
 ---
 
