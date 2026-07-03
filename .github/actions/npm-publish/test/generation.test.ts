@@ -168,12 +168,24 @@ test("main package: command-name override changes bin key", async () => {
   expect(derived.bin).toEqual({ mytool: "./launcher.cjs" });
 });
 
+test("main package: name derived from base, overriding a divergent consumer name", async () => {
+  const derived = mainPackage(
+    { name: "@jamestelfer/WRONG-name", description: "x", license: "MIT" },
+    { entries: await noWindows(), version: "1.0.0", repoUrl: REPO, base: BASE, launcher: "launcher.cjs" },
+  );
+  // name must match the family its optionalDependencies/chinmina/bin reference.
+  expect(derived.name).toBe(BASE);
+  const depFamily = Object.keys(derived.optionalDependencies as object).every((k) =>
+    k.startsWith(`${BASE}-`),
+  );
+  expect(depFamily).toBe(true);
+});
+
 test("main package: metadata untouched; chinmina overrides consumer block", async () => {
   const derived = mainPackage(
     { ...consumerMinimal, chinmina: { command: "x" } },
     { entries: await windows(), version: "1.0.0", repoUrl: REPO, base: BASE, launcher: "launcher.cjs" },
   );
-  expect(derived.name).toBe(consumerMinimal.name);
   expect(derived.description).toBe(consumerMinimal.description);
   expect(derived.homepage).toBe(consumerMinimal.homepage);
   expect(derived.license).toBe(consumerMinimal.license);

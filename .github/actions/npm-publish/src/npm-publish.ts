@@ -60,7 +60,9 @@ const ArchiveEntrySchema = z.object({
   }),
 });
 
-// Consumer main package.json: only `name` is required; everything else is
+// Consumer main package.json. A non-empty `name` is required so the file is a
+// valid manifest, but its value is IGNORED: the main package name is derived
+// from the action's package-name input (see mainPackage). Everything else is
 // optional and preserved untouched. Validation only — the raw object is spread
 // into the derived package so unknown metadata (description/homepage/...) is
 // kept regardless of what the schema lists.
@@ -206,6 +208,11 @@ export function mainPackage(
 
   const result: Record<string, unknown> = { ...consumer };
   // Full overrides.
+  // `name` is derived from the action's package-name input (opts.base), NOT the
+  // consumer package.json: base is the single source of truth for the whole
+  // package family, so the main package's name must match the family its
+  // optionalDependencies/chinmina map/bin reference.
+  result.name = opts.base;
   result.version = opts.version;
   result.repository = { type: "git", url: opts.repoUrl };
   result.bin = { [commandName]: `./${opts.launcher}` };

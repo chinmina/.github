@@ -334,7 +334,14 @@ The action derives fields as follows when it publishes:
 | `files` | **Union** of the default set (launcher + `README.md`) and your entries. |
 | `engines` | Set to `{"node":">=18"}` **only when absent**; left as-is when present. |
 | `chinmina` | **Overwritten** with the runtime `platforms` map that drives the launcher. |
-| `name`, `description`, `homepage`, `license`, `keywords` | **Left untouched** — yours. |
+| `name` | **Overwritten** with the `npm-package-name` input, so the main package always matches the platform family it references. Your `package.json` must still carry a (non-empty) `name` to be a valid manifest, but its value is ignored. |
+| `description`, `homepage`, `license`, `keywords` | **Left untouched** — yours. |
+
+`name` is derived from the `npm-package-name` workflow input — the single source
+of truth for the whole package family (main + platform packages). Keep the
+`name` in your `package.json` consistent with it to avoid confusion, but the
+action overrides it regardless so a stale value cannot publish a mismatched
+package.
 
 The command name defaults to the package's **unscoped** name (e.g. `tool` for
 `@<OWNER>/tool`). To use a different command name, set `chinmina.command` in

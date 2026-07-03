@@ -135,10 +135,24 @@ test("windows release publishes platform + main packages end-to-end", () => {
   expect(win.files).toEqual(["tool.exe"]);
 
   const main = captured(env, "@jamestelfer/tool");
+  expect(main.name).toBe("@jamestelfer/tool"); // matches package-name input
   expect(main.version).toBe("1.2.3");
   expect(main.bin).toEqual({ tool: "./launcher.cjs" });
   expect(main.optionalDependencies["@jamestelfer/tool-windows-x64"]).toBe("1.2.3");
   expect(main.chinmina.platforms["win32-x64"]).toBeDefined();
+});
+
+test("divergent consumer name is overridden to the package-name input", () => {
+  const env = setup("artifacts-no-windows.json", {
+    name: "@jamestelfer/stale-old-name",
+    description: "tool",
+    license: "MIT",
+  });
+  expect(runPublish(env).status).toBe(0);
+  // Main package published under the base name, matching its platform family.
+  expect(publishes(env)).toContain("@jamestelfer/tool");
+  expect(publishes(env)).not.toContain("@jamestelfer/stale-old-name");
+  expect(captured(env, "@jamestelfer/tool").name).toBe("@jamestelfer/tool");
 });
 
 test("prerelease version publishes everything (tag next path exercised)", () => {
