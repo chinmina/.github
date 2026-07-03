@@ -133,13 +133,21 @@ const ArchiveEntrySchema = z
     platform: toPlatform(a.goos, a.goarch),
   }));
 
+// Best-effort label for an artifact whose full shape has not been validated,
+// used only for error messages (no cast: narrows unknown structurally).
+function artifactPath(raw: unknown): string {
+  if (typeof raw === "object" && raw !== null && "path" in raw && typeof raw.path === "string") {
+    return raw.path;
+  }
+  return "<unknown>";
+}
+
 // Discover the platform archives to publish, normalized to the domain Archive.
 export function discoverArchives(artifacts: unknown): Archive[] {
   const out: Archive[] = [];
   for (const raw of z.array(z.unknown()).parse(artifacts)) {
     if (!ArchiveShapeSchema.safeParse(raw).success) continue; // not ours -> skip
-    const path = (raw as { path?: unknown })?.path ?? "<unknown>";
-    out.push(parseOrThrow(ArchiveEntrySchema, raw, `unsupported archive ${String(path)}`));
+    out.push(parseOrThrow(ArchiveEntrySchema, raw, `unsupported archive ${artifactPath(raw)}`));
   }
   return out;
 }

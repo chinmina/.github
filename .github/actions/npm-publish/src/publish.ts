@@ -88,10 +88,14 @@ async function run(work: string): Promise<void> {
 }
 
 const work = mkdtempSync(join(tmpdir(), "npm-publish-"));
+let failure: string | undefined;
 try {
   await run(work);
 } catch (err) {
-  fail((err as Error).message);
+  // Record, don't exit here: fail() calls process.exit(), which would skip the
+  // finally cleanup below and leak the work dir.
+  failure = err instanceof Error ? err.message : String(err);
 } finally {
   rmSync(work, { recursive: true, force: true });
 }
+if (failure !== undefined) fail(failure);
