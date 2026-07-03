@@ -1,5 +1,11 @@
 // Pure, typed generation logic for the npm-publish action.
 //
+// Pipeline: raw goreleaser artifacts --discoverArchives--> Archive[]; then
+// planRelease(consumer, archives) --> the entire release as data (one manifest
+// per platform package + the derived main package.json). publish.ts is pure
+// I/O over that plan. Translation between goreleaser and npm/Node coordinate
+// systems happens exactly once, at discovery (see toPlatform).
+//
 // Naming vs field split (see PRD): the platform package *name* uses
 // goreleaser's raw `goos` token (linux/darwin/windows) so it matches the
 // package names already registered for OIDC trusted publishing. The npm `os`
@@ -8,256 +14,193 @@
 
 import { z } from "zod";
 
-// goreleaser goos -> Node process.platform value (used for the `os` field and
-// the runtime platform-map key).
-const NODE_OS: Record<string, string> = {
-  linux: "linux",
-  darwin: "darwin",
-  windows: "win32",
-};
+// --- Platform coordinate systems -------------------------------------------
+//
+// Four columns, two translations. `linux`/`darwin` are identical across name
+// and field; only `windows` -> `win32` diverges (see PRD R1/R2). Each const
+// array is the single source of truth: it supplies the literal type AND (via
+// z.enum) the parse-time validator, so an unknown token cannot slip past
+// discovery into a later lookup.
+const GOOS = ["linux", "darwin", "windows"] as const;
+const GOARCH = ["amd64", "arm64", "386", "arm"] as const;
+export type Goos = (typeof GOOS)[number];
+export type Goarch = (typeof GOARCH)[number];
 
-// goreleaser goarch -> npm arch token (used for both the name arch token and
-// the `cpu` field; they legitimately coincide).
-const NPM_CPU: Record<string, string> = {
-  amd64: "x64",
-  arm64: "arm64",
-  "386": "ia32",
-  arm: "arm",
-};
+// Node `process.platform` (npm `os` field + map key) and npm arch tokens.
+type NodeOs = "linux" | "darwin" | "win32";
+type NpmCpu = "x64" | "arm64" | "ia32" | "arm";
+type PlatformKey = `${NodeOs}-${NpmCpu}`;
 
-const DEFAULT_ENGINES = { node: ">=18" } as const;
+// `Record<Goos, …>` forces total, exhaustive coverage: adding a goos without a
+// mapping is a compile error.
+const NODE_OS: Record<Goos, NodeOs> = { linux: "linux", darwin: "darwin", windows: "win32" };
+const NPM_CPU: Record<Goarch, NpmCpu> = { amd64: "x64", arm64: "arm64", "386": "ia32", arm: "arm" };
 
-export function nodeOs(goos: string): string {
+// A resolved target platform, every derived token computed once. `nameToken`
+// is the raw goos for the package name; `os`/`cpu` are the npm fields; `key` is
+// the runtime `${platform}-${arch}` map key.
+export interface Platform {
+  readonly nameToken: Goos;
+  readonly os: NodeOs;
+  readonly cpu: NpmCpu;
+  readonly key: PlatformKey;
+}
+
+// The single translation from goreleaser coordinates to a Platform.
+function toPlatform(goos: Goos, goarch: Goarch): Platform {
   const os = NODE_OS[goos];
-  if (!os) throw new Error(`unknown goos '${goos}'`);
-  return os;
-}
-
-export function npmCpu(goarch: string): string {
   const cpu = NPM_CPU[goarch];
-  if (!cpu) throw new Error(`unknown goarch '${goarch}'`);
-  return cpu;
+  return { nameToken: goos, os, cpu, key: `${os}-${cpu}` };
 }
 
-// Strip an npm scope (`@scope/name` -> `name`).
-export function unscopedName(name: string): string {
-  const slash = name.indexOf("/");
-  return slash === -1 ? name : name.slice(slash + 1);
-}
+// --- Types ------------------------------------------------------------------
 
-// --- Schemas ----------------------------------------------------------------
-
-// A goreleaser Archive entry carrying at least one binary. Any entry that does
-// not match (Source archives, checksums, ...) is skipped during discovery.
-const ArchiveEntrySchema = z.object({
-  type: z.literal("Archive"),
-  path: z.string(),
-  goos: z.string(),
-  goarch: z.string(),
-  extra: z.object({
-    Format: z.string(),
-    Binaries: z.array(z.string()).min(1),
-  }),
-});
-
-// Consumer main package.json. A non-empty `name` is required so the file is a
-// valid manifest, but its value is IGNORED: the main package name is derived
-// from the action's package-name input (see mainPackage). Everything else is
-// optional and preserved untouched. Validation only — the raw object is spread
-// into the derived package so unknown metadata (description/homepage/...) is
-// kept regardless of what the schema lists.
-export const ConsumerSchema = z.object({
-  name: z.string().min(1, 'must declare a non-empty "name"'),
-  files: z.array(z.string()).optional(),
-  engines: z.record(z.string(), z.string()).optional(),
-  chinmina: z.object({ command: z.string().optional() }).optional(),
-});
-
-export interface DiscoveredArchive {
-  path: string;
-  format: string;
-  goos: string;
-  goarch: string;
-  binary: string;
+export interface Archive {
+  readonly path: string;
+  readonly format: string;
+  readonly binary: string;
+  readonly platform: Platform;
 }
 
 export interface PlatformPackage {
   name: string;
   version: string;
-  os: [string];
-  cpu: [string];
+  os: [NodeOs];
+  cpu: [NpmCpu];
   files: [string];
   license: string;
   repository: { type: "git"; url: string };
 }
 
-export interface PlatformMapEntry {
-  package: string;
-  bin: string;
+// The complete release as data: one manifest per platform package (paired with
+// the archive it is built from, for binary extraction) plus the derived main
+// package.json. Consumed by publish.ts; nothing here does I/O.
+export interface PublishPlan {
+  readonly platforms: ReadonlyArray<{ archive: Archive; manifest: PlatformPackage }>;
+  readonly main: Record<string, unknown>;
+}
+
+// Consumer main package.json. A non-empty `name` is required so the file is a
+// valid manifest, but its value is IGNORED (the main package name is derived
+// from opts.base). LOOSE: unknown metadata (description/homepage/...) survives
+// parsing and is spread into the derived package untouched.
+const ConsumerSchema = z.looseObject({
+  name: z.string().min(1, 'must declare a non-empty "name"'),
+  files: z.array(z.string()).optional(),
+  engines: z.record(z.string(), z.string()).optional(),
+  chinmina: z.object({ command: z.string().optional() }).optional(),
+});
+export type Consumer = z.infer<typeof ConsumerSchema>;
+
+// --- Parsing ----------------------------------------------------------------
+
+// The one parse-or-explain idiom, shared by env/consumer/etc. Throws a readable
+// error naming the offending field(s) on failure.
+export function parseOrThrow<T>(schema: z.ZodType<T>, raw: unknown, label: string): T {
+  const parsed = schema.safeParse(raw);
+  if (!parsed.success) throw new Error(`${label}:\n${z.prettifyError(parsed.error)}`);
+  return parsed.data;
+}
+
+export function parseConsumer(raw: unknown): Consumer {
+  return parseOrThrow(ConsumerSchema, raw, "main package.json is invalid");
 }
 
 // --- Discovery --------------------------------------------------------------
 
-// Discover the platform archives to publish: Archive entries with at least one
-// binary. Non-matching artifact types are silently skipped.
-export function discoverArchives(artifacts: unknown): DiscoveredArchive[] {
-  const list = z.array(z.unknown()).parse(artifacts);
-  const out: DiscoveredArchive[] = [];
-  for (const raw of list) {
-    const parsed = ArchiveEntrySchema.safeParse(raw);
-    if (!parsed.success) continue;
-    const a = parsed.data;
-    out.push({
-      path: a.path,
-      format: a.extra.Format,
-      goos: a.goos,
-      goarch: a.goarch,
-      binary: a.extra.Binaries[0]!,
-    });
+// Is this artifact a binary-bearing Archive at all? Source archives, checksums,
+// etc. fail this and are skipped. A matched Archive with an unknown platform is
+// then rejected loudly (fail-fast, R4) by the enum fields below.
+const ArchiveShapeSchema = z.object({
+  type: z.literal("Archive"),
+  extra: z.object({ Binaries: z.array(z.string()).min(1) }),
+});
+
+// The transform normalizes the raw goreleaser shape into the domain Archive, so
+// no downstream code re-reads goos/goarch or `extra`.
+const ArchiveEntrySchema = z
+  .object({
+    type: z.literal("Archive"),
+    path: z.string(),
+    goos: z.enum(GOOS),
+    goarch: z.enum(GOARCH),
+    extra: z.object({ Format: z.string(), Binaries: z.array(z.string()).min(1) }),
+  })
+  .transform((a): Archive => ({
+    path: a.path,
+    format: a.extra.Format,
+    binary: a.extra.Binaries[0]!,
+    platform: toPlatform(a.goos, a.goarch),
+  }));
+
+// Discover the platform archives to publish, normalized to the domain Archive.
+export function discoverArchives(artifacts: unknown): Archive[] {
+  const out: Archive[] = [];
+  for (const raw of z.array(z.unknown()).parse(artifacts)) {
+    if (!ArchiveShapeSchema.safeParse(raw).success) continue; // not ours -> skip
+    const path = (raw as { path?: unknown })?.path ?? "<unknown>";
+    out.push(parseOrThrow(ArchiveEntrySchema, raw, `unsupported archive ${String(path)}`));
   }
   return out;
 }
 
-// --- Generation -------------------------------------------------------------
+// --- Planning ---------------------------------------------------------------
+
+// Strip an npm scope (`@scope/name` -> `name`).
+const unscopedName = (name: string): string => name.slice(name.indexOf("/") + 1);
 
 // Platform package name: `<base>-<goos>-<npm-cpu>` (goos token stays raw).
-export function platformPackageName(
-  base: string,
-  goos: string,
-  goarch: string,
-): string {
-  return `${base}-${goos}-${npmCpu(goarch)}`;
-}
+const packageName = (base: string, p: Platform): string => `${base}-${p.nameToken}-${p.cpu}`;
 
-// Node platform-map key: `<node-os>-<npm-cpu>` (e.g. `win32-x64`).
-export function platformKey(goos: string, goarch: string): string {
-  return `${nodeOs(goos)}-${npmCpu(goarch)}`;
-}
-
-export function platformPackage(
-  entry: DiscoveredArchive,
-  opts: { base: string; version: string; repoUrl: string },
-): PlatformPackage {
-  return {
-    name: platformPackageName(opts.base, entry.goos, entry.goarch),
-    version: opts.version,
-    os: [nodeOs(entry.goos)],
-    cpu: [npmCpu(entry.goarch)],
-    files: [entry.binary],
-    license: "MIT",
-    repository: { type: "git", url: opts.repoUrl },
-  };
-}
-
-// Build the chinmina.platforms map: Node platform-arch key -> {package, bin}.
-// `package` is the windows-named platform package; `bin` is the exact binary
-// filename from goreleaser (so `.exe` is data, not launcher code).
-export function platformsMap(
-  entries: DiscoveredArchive[],
-  base: string,
-): Record<string, PlatformMapEntry> {
-  const platforms: Record<string, PlatformMapEntry> = {};
-  for (const entry of entries) {
-    platforms[platformKey(entry.goos, entry.goarch)] = {
-      package: platformPackageName(base, entry.goos, entry.goarch),
-      bin: entry.binary,
-    };
-  }
-  return platforms;
-}
-
-// Union two file lists preserving order and removing duplicates.
-export function unionFiles(
-  defaults: string[],
-  supplied: unknown,
-): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  const extra = Array.isArray(supplied) ? (supplied as string[]) : [];
-  for (const f of [...defaults, ...extra]) {
-    if (!seen.has(f)) {
-      seen.add(f);
-      out.push(f);
-    }
-  }
-  return out;
-}
-
-// Derive the complete main package.json from the consumer's raw input object.
-// The raw object is spread first so consumer-owned metadata is preserved; the
-// action then overrides the derived fields.
-export function mainPackage(
-  consumer: Record<string, unknown>,
-  opts: {
-    entries: DiscoveredArchive[];
-    version: string;
-    repoUrl: string;
-    base: string;
-    launcher: string;
-  },
-): Record<string, unknown> {
-  const chinmina = consumer.chinmina as { command?: string } | undefined;
-  const commandName = chinmina?.command ?? unscopedName(opts.base);
-
-  const optionalDependencies: Record<string, string> = {};
-  for (const entry of opts.entries) {
-    optionalDependencies[
-      platformPackageName(opts.base, entry.goos, entry.goarch)
-    ] = opts.version;
-  }
-
-  const result: Record<string, unknown> = { ...consumer };
-  // Full overrides.
-  // `name` is derived from the action's package-name input (opts.base), NOT the
-  // consumer package.json: base is the single source of truth for the whole
-  // package family, so the main package's name must match the family its
-  // optionalDependencies/chinmina map/bin reference.
-  result.name = opts.base;
-  result.version = opts.version;
-  result.repository = { type: "git", url: opts.repoUrl };
-  result.bin = { [commandName]: `./${opts.launcher}` };
-  result.optionalDependencies = optionalDependencies;
-  // Union.
-  result.files = unionFiles([opts.launcher, "README.md"], consumer.files);
-  // Set-if-absent.
-  if (!result.engines) result.engines = { ...DEFAULT_ENGINES };
-  // Data-driven launcher map (replaces any consumer-supplied chinmina block).
-  result.chinmina = { platforms: platformsMap(opts.entries, opts.base) };
-  return result;
-}
-
-// --- Validation -------------------------------------------------------------
-
-// Validate the consumer main package.json shape (fail-fast). Throws a readable
-// error naming the offending field.
-export function validateConsumer(raw: unknown): void {
-  const parsed = ConsumerSchema.safeParse(raw);
-  if (!parsed.success) {
-    throw new Error(
-      `main package.json is invalid:\n${z.prettifyError(parsed.error)}`,
-    );
-  }
-}
-
-// Validate that there is something to publish (fail-fast).
-export function validateArchives(entries: DiscoveredArchive[]): void {
-  if (entries.length === 0) {
+// Build the entire release as data. The main package is the consumer spread
+// first (preserving consumer-owned metadata) with derived fields overriding.
+// `name` is derived from opts.base — the single source of truth for the whole
+// package family — so the main package cannot diverge from the platform
+// packages / optionalDependencies / chinmina map it references.
+export function planRelease(
+  consumer: Consumer,
+  archives: Archive[],
+  opts: { base: string; version: string; repoUrl: string; launcher: string },
+): PublishPlan {
+  if (archives.length === 0) {
     throw new Error(
       "no qualifying Archive entries found in artifacts.json " +
         "(need type==Archive with at least one binary)",
     );
   }
-}
+  const { base, version, repoUrl, launcher } = opts;
+  const repository = { type: "git", url: repoUrl } as const;
 
-// Validate every discovered platform maps to a known Node os/cpu (fail-fast,
-// rather than mid-publish). Throws naming the offending archive.
-export function validateMappings(entries: DiscoveredArchive[]): void {
-  for (const entry of entries) {
-    try {
-      nodeOs(entry.goos);
-      npmCpu(entry.goarch);
-    } catch (err) {
-      throw new Error(`${(err as Error).message} (archive ${entry.path})`);
-    }
-  }
+  const platforms = archives.map((archive) => ({
+    archive,
+    manifest: {
+      name: packageName(base, archive.platform),
+      version,
+      os: [archive.platform.os],
+      cpu: [archive.platform.cpu],
+      files: [archive.binary],
+      license: "MIT",
+      repository,
+    } satisfies PlatformPackage,
+  }));
+
+  const command = consumer.chinmina?.command ?? unscopedName(base);
+  const main = {
+    ...consumer,
+    name: base,
+    version,
+    repository,
+    bin: { [command]: `./${launcher}` },
+    optionalDependencies: Object.fromEntries(platforms.map((p) => [p.manifest.name, version])),
+    files: [...new Set([launcher, "README.md", ...(consumer.files ?? [])])],
+    engines: consumer.engines ?? { node: ">=18" },
+    // Data-driven launcher map (replaces any consumer-supplied chinmina block).
+    chinmina: {
+      platforms: Object.fromEntries(
+        platforms.map((p) => [p.archive.platform.key, { package: p.manifest.name, bin: p.archive.binary }]),
+      ),
+    },
+  };
+
+  return { platforms, main };
 }
