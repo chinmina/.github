@@ -27,10 +27,18 @@ name: goreleaser release (reusable)
 on:
   workflow_call:
     secrets:
+      # App-path + homebrew only. ENVIRONMENT-scoped to `release` and consumed by
+      # the release job below (which runs in that environment). A reusable-
+      # workflow CALL job cannot hold an `environment:`, so a narrowed caller
+      # `secrets:` map would resolve EMPTY; the caller therefore delivers it with
+      # `secrets: inherit` and marks that line `# zizmor: ignore[secrets-inherit]`
+      # so the broad pass is clearly intended. The octo-sts path is keyless (it
+      # mints the tap token) and passes nothing.
       HOMEBREW_GITHUB_TOKEN:
         description: >-
           Homebrew tap write token. Required only for token-source "app" with
-          homebrew enabled; the octo-sts path mints the tap token instead.
+          homebrew enabled; consumed by the release job in the `release`
+          environment. The octo-sts path mints the tap token instead.
         required: false
     inputs:
       pre-build:

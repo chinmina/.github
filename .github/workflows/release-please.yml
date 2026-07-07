@@ -34,14 +34,23 @@ name: release-please (reusable)
 on:
   workflow_call:
     secrets:
+      # App path only. Both are ENVIRONMENT-scoped to `automation` and consumed
+      # by the release-please job below (which runs in that environment). A
+      # reusable-workflow CALL job cannot hold an `environment:`, so a narrowed
+      # caller `secrets:` map would resolve EMPTY; the caller therefore delivers
+      # them with `secrets: inherit` and marks that line
+      # `# zizmor: ignore[secrets-inherit]` so the broad pass is clearly intended.
+      # The octo-sts path is keyless and passes neither.
       RELEASE_PLEASE_CLIENT_ID:
         description: >-
-          GitHub App client ID. Required only for token-source "app"; unused on
-          the keyless octo-sts path.
+          GitHub App client ID. Required only for token-source "app"; consumed by
+          the release-please job in the `automation` environment. Unused on the
+          keyless octo-sts path.
         required: false
       RELEASE_PLEASE_APP_PRIVATE_KEY:
         description: >-
-          GitHub App private key. Required only for token-source "app"; unused on
+          GitHub App private key. Required only for token-source "app"; consumed
+          by the release-please job in the `automation` environment. Unused on
           the keyless octo-sts path.
         required: false
     inputs:
