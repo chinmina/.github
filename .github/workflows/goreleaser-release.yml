@@ -16,10 +16,22 @@
 # pass and sets up Go and/or Bun via their setup actions, per what the repo
 # declares in mise.
 #
-# Consumers call this at @verified-actions with `secrets: inherit`.
+# Consumers call this at @verified-actions. On the `app` token-source with
+# homebrew enabled they pass HOMEBREW_GITHUB_TOKEN via `secrets: inherit` (it is
+# environment-scoped, so only the reusable workflow's env-targeting job can
+# resolve it). The keyless octo-sts path needs NO secrets, so its callers omit
+# `secrets:` entirely.
+
+name: goreleaser release (reusable)
 
 on:
   workflow_call:
+    secrets:
+      HOMEBREW_GITHUB_TOKEN:
+        description: >-
+          Homebrew tap write token. Required only for token-source "app" with
+          homebrew enabled; the octo-sts path mints the tap token instead.
+        required: false
     inputs:
       pre-build:
         description: >-
@@ -97,8 +109,13 @@ on:
         type: string
         default: .github/workflows/npm/main
 
+# No workflow-level GITHUB_TOKEN scope: the release job declares exactly the
+# scopes it needs.
+permissions: {}
+
 jobs:
   release:
+    name: Build, attest & publish
     runs-on: ubuntu-latest
     environment: release # R35
     permissions:

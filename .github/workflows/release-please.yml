@@ -24,10 +24,26 @@
 #                          subject: repo:<owner>/<repo>:environment:automation
 #                          (typically with claim_pattern.ref: refs/heads/main).
 #
-# Consumers call this at @verified-actions with `secrets: inherit`.
+# Consumers call this at @verified-actions. On the `app` token-source they pass
+# the RELEASE_PLEASE_* secrets via `secrets: inherit` (they are environment-scoped,
+# so only the reusable workflow's env-targeting job can resolve them). The
+# keyless octo-sts path needs NO secrets, so its callers omit `secrets:` entirely.
+
+name: release-please (reusable)
 
 on:
   workflow_call:
+    secrets:
+      RELEASE_PLEASE_CLIENT_ID:
+        description: >-
+          GitHub App client ID. Required only for token-source "app"; unused on
+          the keyless octo-sts path.
+        required: false
+      RELEASE_PLEASE_APP_PRIVATE_KEY:
+        description: >-
+          GitHub App private key. Required only for token-source "app"; unused on
+          the keyless octo-sts path.
+        required: false
     inputs:
       token-source:
         description: Installation-token source. "app" (default) or "octo-sts".
@@ -63,8 +79,13 @@ on:
         type: string
         default: ""
 
+# No workflow-level GITHUB_TOKEN scope: the job below declares exactly what it
+# needs, and all writes use the minted installation token, not GITHUB_TOKEN.
+permissions: {}
+
 jobs:
   release-please:
+    name: Release Please
     runs-on: ubuntu-latest
     environment: automation # R34
     permissions:

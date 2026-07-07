@@ -74,8 +74,14 @@ gh api --method POST "repos/<OWNER>/<REPO>/environments/release/deployment-branc
 
 ### 1b. Secrets (per token source + per channel)
 
-Scope every secret to the environment that consumes it; `secrets: inherit` in
-the caller carries them into the reusable workflow's environment-targeting job.
+Scope every secret to the environment that consumes it. On the **app** path the
+caller uses `secrets: inherit`: because the secrets are environment-scoped and a
+reusable-workflow *call job* cannot declare an `environment:`, only the reusable
+workflow's env-targeting job can resolve them — a narrowed `secrets:` map is
+evaluated in the caller (no environment) and reads empty, so `inherit` is the
+required mechanism, not a shortcut. On the **octo-sts** path there are **no**
+secrets, so callers omit `secrets:` entirely (and drop the
+`# zizmor: ignore[secrets-inherit]` comment).
 
 | Need it when… | Secret | Environment |
 |---------------|--------|-------------|
@@ -242,11 +248,21 @@ permissions:
 
 jobs:
   release-please:
+    # app path only: keep the `# zizmor: ignore[secrets-inherit]` trailing
+    # comment (inherit is required — see below). octo-sts: delete both the
+    # comment and the `secrets:` line.
     uses: chinmina/.github/.github/workflows/release-please.yml@verified-actions # zizmor: ignore[secrets-inherit]
     with:
       token-source: <app|octo-sts> # from Step 0.2
-    # secrets: inherit is intentional — environment-scoped secrets must resolve
-    # inside the reusable workflow's environment-targeting job.
+    # SECRETS — pass them per token-source:
+    #  * app:      keep `secrets: inherit` below. The RELEASE_PLEASE_* secrets are
+    #              ENVIRONMENT-scoped (Step 1b), and a reusable-workflow CALL job
+    #              cannot declare an `environment:`, so they can only resolve
+    #              inside the reusable workflow's env-targeting job — which is what
+    #              `inherit` enables. A narrowed `secrets:` map is evaluated in the
+    #              caller (no environment) and would read EMPTY, so inherit is
+    #              required here; it is not laziness.
+    #  * octo-sts: keyless — DELETE the whole `secrets:` line (nothing to pass).
     secrets: inherit
 ```
 
@@ -286,6 +302,11 @@ jobs:
       # npm-package-name: "@<OWNER>/<REPO>"  # required when disable-npm: false
       # npm-main-package-dir: ".github/workflows/npm/main"  # default
       # pre-build: "<shell>"             # only if codegen is NOT in goreleaser before.hooks
+    # SECRETS (see 2a for the environment-scoping rationale):
+    #  * app + homebrew: keep `secrets: inherit` (HOMEBREW_GITHUB_TOKEN is
+    #    environment-scoped, so inherit is required).
+    #  * octo-sts, OR app without homebrew: DELETE the `secrets:` line and the
+    #    `# zizmor: ignore[secrets-inherit]` comment above — nothing to pass.
     secrets: inherit
 ```
 

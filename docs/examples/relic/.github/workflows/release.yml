@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   release:
-    uses: chinmina/.github/.github/workflows/goreleaser-release.yml@verified-actions # zizmor: ignore[secrets-inherit]
+    uses: chinmina/.github/.github/workflows/goreleaser-release.yml@verified-actions
     with:
       # Keyless: mint the release-relic token (and release-tap when homebrew is
       # on) against the centralised org policies instead of github.token/a PAT.
@@ -27,6 +27,6 @@ jobs:
       # mint + tap policy.
       disable-homebrew: true
       # templ codegen runs in goreleaser before.hooks, so no pre-build needed.
-    # secrets: inherit is intentional — environment-scoped secrets must resolve
-    # inside the reusable workflow's environment-targeting job.
-    secrets: inherit
+    # No `secrets:` block: the octo-sts path is keyless. (On the `app` path with
+    # homebrew you would add `secrets: inherit` so the environment-scoped
+    # HOMEBREW_GITHUB_TOKEN resolves inside the reusable workflow's job.)

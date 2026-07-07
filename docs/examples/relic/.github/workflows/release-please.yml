@@ -15,9 +15,9 @@ permissions:
 
 jobs:
   release-please:
-    uses: chinmina/.github/.github/workflows/release-please.yml@verified-actions # zizmor: ignore[secrets-inherit]
+    uses: chinmina/.github/.github/workflows/release-please.yml@verified-actions
     with:
       token-source: octo-sts
-    # secrets: inherit is intentional — environment-scoped secrets must resolve
-    # inside the reusable workflow's environment-targeting job.
-    secrets: inherit
+    # No `secrets:` block: the octo-sts path is keyless. (On the `app` path you
+    # would add `secrets: inherit` so the environment-scoped RELEASE_PLEASE_*
+    # secrets resolve inside the reusable workflow's environment-targeting job.)
