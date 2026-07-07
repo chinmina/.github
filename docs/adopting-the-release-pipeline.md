@@ -219,11 +219,16 @@ post-install steps needed.
 Copy these into the consuming repo, preserving paths, then substitute the
 `<PLACEHOLDER>` tokens. Filenames matter where noted.
 
-> **Caller `permissions` are a ceiling.** A reusable workflow can only
-> *downgrade* the `GITHUB_TOKEN`, never elevate it ([GitHub docs][perm-docs]),
-> so the caller must grant **at least** what the reusable workflow's job
-> declares. `permissions: {}` caps `id-token`/`contents`/`attestations` to
-> nothing, which kills the octo-sts OIDC mint on the very first step. Grant:
+> **Caller `permissions` are a ceiling — grant them on the calling *job*, not
+> the workflow.** A reusable workflow can only *downgrade* the `GITHUB_TOKEN`,
+> never elevate it ([GitHub docs][perm-docs]), so the calling job must grant
+> **at least** what the reusable workflow's job declares. Set workflow-level
+> `permissions: {}` (default-deny) and put the grant on the `jobs.<id>:` block
+> that calls the reusable workflow — this is the secure-by-default shape and
+> keeps the token off every other job. A workflow-level `permissions: {}` with
+> **no** job grant caps `id-token`/`contents`/`attestations` to nothing, which
+> kills the octo-sts OIDC mint on the very first step. Grant, **on the calling
+> job**:
 > - **release-please caller** → `contents: read` + `id-token: write`
 > - **release (goreleaser) caller** → `contents: write` + `id-token: write` + `attestations: write`
 >
@@ -239,15 +244,18 @@ on:
   push:
     branches: [<DEFAULT_BRANCH>] # usually main
 
-# Caller permissions are a CEILING — a reusable workflow can only DOWNGRADE the
-# GITHUB_TOKEN, never elevate it. Grant at least what the reusable workflow's job
-# declares; `permissions: {}` would starve the octo-sts OIDC mint (no id-token).
-permissions:
-  contents: read
-  id-token: write # octo-sts OIDC token exchange (harmless on the app path)
+# Default-deny at the workflow level; grant the GITHUB_TOKEN ceiling on the JOB
+# that calls the reusable workflow (secure by default — no other job sees it).
+permissions: {}
 
 jobs:
   release-please:
+    # Caller permissions are a CEILING — a reusable workflow can only DOWNGRADE
+    # the GITHUB_TOKEN, never elevate it. Grant at least what the reusable
+    # workflow's job declares; omitting this would starve the octo-sts OIDC mint.
+    permissions:
+      contents: read
+      id-token: write # octo-sts OIDC token exchange (harmless on the app path)
     # app path only: keep the `# zizmor: ignore[secrets-inherit]` trailing
     # comment (inherit is required — see below). octo-sts: delete both the
     # comment and the `secrets:` line.
@@ -282,16 +290,18 @@ on:
   push:
     tags: ["v*"]
 
-# Caller permissions are a CEILING (see 2a). Grant at least what
-# goreleaser-release.yml's job declares — `permissions: {}` would starve the
-# octo-sts mint and the keyless attestation.
-permissions:
-  contents: write # fill + publish the release, push assets
-  id-token: write # octo-sts OIDC mint + keyless attestation
-  attestations: write # record build attestations
+# Default-deny at the workflow level; grant on the calling JOB (see 2a).
+permissions: {}
 
 jobs:
   release:
+    # Caller permissions are a CEILING (see 2a). Grant at least what
+    # goreleaser-release.yml's job declares; omitting this would starve the
+    # octo-sts mint and the keyless attestation.
+    permissions:
+      contents: write # fill + publish the release, push assets
+      id-token: write # octo-sts OIDC mint + keyless attestation
+      attestations: write # record build attestations
     uses: chinmina/.github/.github/workflows/goreleaser-release.yml@verified-actions # zizmor: ignore[secrets-inherit]
     with:
       token-source: <app|octo-sts>       # must match Step 0.2 / the release-please caller
