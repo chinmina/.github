@@ -24,10 +24,35 @@
 #                          subject: repo:<owner>/<repo>:environment:automation
 #                          (typically with claim_pattern.ref: refs/heads/main).
 #
-# Consumers call this at @verified-actions with `secrets: inherit`.
+# Consumers call this at @verified-actions. On the `app` token-source they pass
+# the RELEASE_PLEASE_* secrets via `secrets: inherit` (they are environment-scoped,
+# so only the reusable workflow's env-targeting job can resolve them). The
+# keyless octo-sts path needs NO secrets, so its callers omit `secrets:` entirely.
+
+name: Release PR automation
 
 on:
   workflow_call:
+    secrets:
+      # App path only. Both are ENVIRONMENT-scoped to `automation` and consumed
+      # by the release-please job below (which runs in that environment). A
+      # reusable-workflow CALL job cannot hold an `environment:`, so a narrowed
+      # caller `secrets:` map would resolve EMPTY; the caller therefore delivers
+      # them with `secrets: inherit` and marks that line
+      # `# zizmor: ignore[secrets-inherit]` so the broad pass is clearly intended.
+      # The octo-sts path is keyless and passes neither.
+      RELEASE_PLEASE_CLIENT_ID:
+        description: >-
+          GitHub App client ID. Required only for token-source "app"; consumed by
+          the release-please job in the `automation` environment. Unused on the
+          keyless octo-sts path.
+        required: false
+      RELEASE_PLEASE_APP_PRIVATE_KEY:
+        description: >-
+          GitHub App private key. Required only for token-source "app"; consumed
+          by the release-please job in the `automation` environment. Unused on
+          the keyless octo-sts path.
+        required: false
     inputs:
       token-source:
         description: Installation-token source. "app" (default) or "octo-sts".
@@ -63,13 +88,21 @@ on:
         type: string
         default: ""
 
+# No workflow-level GITHUB_TOKEN scope: the job below declares exactly what it
+# needs, and all writes use the minted installation token, not GITHUB_TOKEN.
+permissions: {}
+
 jobs:
   release-please:
+    name: Release Please
     runs-on: ubuntu-latest
     environment: automation # R34
     permissions:
       contents: read # all writes use the minted installation token, not GITHUB_TOKEN
-      id-token: write # R34: required for the octo-sts OIDC exchange (harmless for the app path)
+      # R34: octo-sts OIDC exchange. Declared on BOTH paths, so every caller must
+      # grant id-token: write (even the app path, where it is unused) — a caller
+      # that omits it fails at STARTUP, not silently.
+      id-token: write
     # Strict bash for every run step (GHA's `bash` keyword gives -e + pipefail
     # but not -u; this is that same definition plus nounset), defined once.
     defaults:

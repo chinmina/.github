@@ -16,10 +16,30 @@
 # pass and sets up Go and/or Bun via their setup actions, per what the repo
 # declares in mise.
 #
-# Consumers call this at @verified-actions with `secrets: inherit`.
+# Consumers call this at @verified-actions. On the `app` token-source with
+# homebrew enabled they pass HOMEBREW_GITHUB_TOKEN via `secrets: inherit` (it is
+# environment-scoped, so only the reusable workflow's env-targeting job can
+# resolve it). The keyless octo-sts path needs NO secrets, so its callers omit
+# `secrets:` entirely.
+
+name: Release
 
 on:
   workflow_call:
+    secrets:
+      # App-path + homebrew only. ENVIRONMENT-scoped to `release` and consumed by
+      # the release job below (which runs in that environment). A reusable-
+      # workflow CALL job cannot hold an `environment:`, so a narrowed caller
+      # `secrets:` map would resolve EMPTY; the caller therefore delivers it with
+      # `secrets: inherit` and marks that line `# zizmor: ignore[secrets-inherit]`
+      # so the broad pass is clearly intended. The octo-sts path is keyless (it
+      # mints the tap token) and passes nothing.
+      HOMEBREW_GITHUB_TOKEN:
+        description: >-
+          Homebrew tap write token. Required only for token-source "app" with
+          homebrew enabled; consumed by the release job in the `release`
+          environment. The octo-sts path mints the tap token instead.
+        required: false
     inputs:
       pre-build:
         description: >-
@@ -97,8 +117,13 @@ on:
         type: string
         default: .github/workflows/npm/main
 
+# No workflow-level GITHUB_TOKEN scope: the release job declares exactly the
+# scopes it needs.
+permissions: {}
+
 jobs:
   release:
+    name: Build, attest & publish
     runs-on: ubuntu-latest
     environment: release # R35
     permissions:
@@ -201,7 +226,7 @@ jobs:
             exit 1
           fi
           if ! mise ls --current --json | jq -e 'has("node")' >/dev/null; then
-            echo "::error::npm channel requires 'node' declared in mise config (mise.toml or .tool-versions)."
+            echo "::error::npm channel requires 'node' declared in mise.toml."
             exit 1
           fi
           echo "npm inputs validated: package=${NPM_PACKAGE_NAME}, main-dir=${NPM_MAIN_PACKAGE_DIR}"

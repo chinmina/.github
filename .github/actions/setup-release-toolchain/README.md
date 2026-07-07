@@ -7,7 +7,7 @@ with versions read from the same mise config. It serves both Go and Bun
 projects: goreleaser builds both, so the kit has one toolchain installer.
 
 This is a *prescriptive* action: every **requested CLI** MUST be declared in the
-consumer's `mise.toml` / `.tool-versions`. If one is missing, the action fails
+consumer's `mise.toml`. If one is missing, the action fails
 and names it — the toolkit imposes the standard rather than papering over a
 missing declaration.
 
@@ -71,7 +71,7 @@ a `run:` step would not — `PATH` edits there don't carry to later steps; only
 > the tool must surface under the exact key `binstaller` — but it has no mise
 > registry short name, and the downstream `binstaller-install-script` action
 > calls the CLI as `binst`. Both needs are met by an aliased `github:` backend
-> in `mise.toml` (not `.tool-versions`):
+> in `mise.toml`:
 >
 > ```toml
 > [tool_alias]

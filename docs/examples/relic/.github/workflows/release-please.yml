@@ -5,19 +5,22 @@ on:
   push:
     branches: [main]
 
-# Caller permissions are a CEILING: a reusable workflow can only downgrade the
-# GITHUB_TOKEN, never elevate it. So the caller must grant at least what the
-# reusable workflow's job declares — `permissions: {}` here would starve the
-# octo-sts OIDC mint (no id-token: write) and the pipeline dies on its first step.
-permissions:
-  contents: read
-  id-token: write # required for the octo-sts OIDC token exchange
+# Default-deny at the workflow level; the GITHUB_TOKEN ceiling is granted on the
+# calling job below (secure by default — no other job could ever see it).
+permissions: {}
 
 jobs:
   release-please:
-    uses: chinmina/.github/.github/workflows/release-please.yml@verified-actions # zizmor: ignore[secrets-inherit]
+    # Caller permissions are a CEILING: a reusable workflow can only downgrade
+    # the GITHUB_TOKEN, never elevate it, so grant at least what the reusable
+    # workflow's job declares. Omitting this would starve the octo-sts OIDC mint
+    # (no id-token: write) and the pipeline would die on its first step.
+    permissions:
+      contents: read
+      id-token: write # required for the octo-sts OIDC token exchange
+    uses: chinmina/.github/.github/workflows/release-please.yml@verified-actions
     with:
       token-source: octo-sts
-    # secrets: inherit is intentional — environment-scoped secrets must resolve
-    # inside the reusable workflow's environment-targeting job.
-    secrets: inherit
+    # No `secrets:` block: the octo-sts path is keyless. (On the `app` path you
+    # would add `secrets: inherit` so the environment-scoped RELEASE_PLEASE_*
+    # secrets resolve inside the reusable workflow's environment-targeting job.)
