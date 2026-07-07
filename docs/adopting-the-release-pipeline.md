@@ -120,8 +120,9 @@ channel never need a secret (keyless OIDC / `github.token`).
 
 ### 1e. Tool + spec files in the repo (always)
 
-- [ ] **mise config** (`.tool-versions` or `mise.toml`) declares every tool the
-      release flow uses — mise is the version authority. **Required:** `go` and
+- [ ] **`mise.toml`** declares every tool the release flow uses — mise is the
+      version authority, and this kit standardises on a single `mise.toml`
+      (`.tool-versions` is not used). **Required:** `go` and
       `goreleaser`; add `binstaller` when that channel is on (it needs a small
       `mise.toml` block — see [Declaring `binstaller`](#declaring-binstaller)).
       The npm channel needs **no** extra tool: the `npm-publish` action pins its
@@ -148,9 +149,9 @@ channel never need a secret (keyless OIDC / `github.token`).
 
 #### Declaring `binstaller`
 
-`binstaller` is the one tool that needs more than a version line, and it **must**
-live in `mise.toml` — the `.tool-versions` format can't express the `[tool_alias]`
-table or the `rename_exe` option below. It has **no mise registry short name**, yet
+`binstaller` is the one tool that needs more than a plain version line in
+`mise.toml`: it requires the `[tool_alias]` table and the `rename_exe` option
+below. It has **no mise registry short name**, yet
 `setup-release-toolchain` validates it with `mise ls --current --json` +
 `jq 'has("binstaller")'`, so it must surface under the exact key `binstaller`.
 At the same time `binstaller-install-script` calls the CLI as `binst` (not
@@ -761,8 +762,8 @@ keep it intact when binstaller is on.
 - **Tag-push contract**: the tag must be pushed by the *installation token*
   (the wrapper does this), never `GITHUB_TOKEN`. A `GITHUB_TOKEN`-pushed tag does
   not emit a workflow-triggering event, so `release.yml` never fires.
-- **mise contract**: every tool the wrapper requests must be in the mise config
-  (`.tool-versions` or `mise.toml`; `binstaller` requires `mise.toml`).
+- **mise contract**: every tool the wrapper requests must be declared in
+  `mise.toml` (the kit's single mise config).
 - **Environment contract**: `automation` and `release` must exist and be gated
   *before* the first run (Step 1a).
 - **octo-sts subject contract**: `…:environment:automation`, not the bare
@@ -852,7 +853,7 @@ assumption; run them via the pinned invocations below.
 | `release-please.yml` fails: "… does not enable draft releases" | `release-please-config.json` missing `"draft": true` | add `"draft": true` to `release-please-config.json` (1e) |
 | Release publishes before attestation / no gate, or a duplicate release appears | goreleaser missing `use_existing_draft: true` (or not in draft+keep-existing mode) | set `release.draft: true` + `mode: keep-existing` + `use_existing_draft: true` (2d) |
 | Homebrew cask published on a prerelease/RC tag | cask block missing `skip_upload: auto` | add `skip_upload: auto` to the `homebrew_casks:` entry (2d) |
-| `setup-release-toolchain` fails: tool not declared | required tool missing from mise config | declare `go`/`goreleaser` in `.tool-versions` or `mise.toml`, and `binstaller` in `mise.toml` (it needs `[tool_alias]` + `rename_exe`, unexpressible in `.tool-versions`) (1e) |
+| `setup-release-toolchain` fails: tool not declared | required tool missing from `mise.toml` | declare `go`/`goreleaser` (and `binstaller` when on — it needs `[tool_alias]` + `rename_exe`) in `mise.toml` (1e) |
 | Publish gate silently absent | `automation`/`release` auto-created ungated | create them with protection rules *before* first run (1a) |
 | homebrew step fails on auth | `HOMEBREW_GITHUB_TOKEN` missing/unscoped, or channel left on | add the env-scoped token, or `disable-homebrew: true` (1b/2b) |
 | npm publish fails: "401 Unauthorized" or OIDC rejection | trusted publisher not configured on npmjs.com, wrong workflow filename, wrong environment name, or wrong repo | configure trusted publisher per package with `release.yml` (caller) + `release` env (2e) |

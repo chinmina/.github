@@ -226,7 +226,7 @@ jobs:
             exit 1
           fi
           if ! mise ls --current --json | jq -e 'has("node")' >/dev/null; then
-            echo "::error::npm channel requires 'node' declared in mise config (mise.toml or .tool-versions)."
+            echo "::error::npm channel requires 'node' declared in mise.toml."
             exit 1
           fi
           echo "npm inputs validated: package=${NPM_PACKAGE_NAME}, main-dir=${NPM_MAIN_PACKAGE_DIR}"

@@ -62,7 +62,7 @@ runs:
           fi
         done
         if (( ${#missing[@]} )); then
-          echo "::error title=setup-release-toolchain::Required tools not declared in this repository's mise configuration: ${missing[*]}. Add them to mise.toml or .tool-versions." >&2
+          echo "::error title=setup-release-toolchain::Required tools not declared in this repository's mise configuration: ${missing[*]}. Add them to mise.toml." >&2
           exit 1
         fi
 
