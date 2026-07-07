@@ -852,7 +852,7 @@ assumption; run them via the pinned invocations below.
 | `release-please.yml` fails: "… does not enable draft releases" | `release-please-config.json` missing `"draft": true` | add `"draft": true` to `release-please-config.json` (1e) |
 | Release publishes before attestation / no gate, or a duplicate release appears | goreleaser missing `use_existing_draft: true` (or not in draft+keep-existing mode) | set `release.draft: true` + `mode: keep-existing` + `use_existing_draft: true` (2d) |
 | Homebrew cask published on a prerelease/RC tag | cask block missing `skip_upload: auto` | add `skip_upload: auto` to the `homebrew_casks:` entry (2d) |
-| `setup-release-toolchain` fails: tool not declared | required tool missing from mise config | declare `go`/`goreleaser`/`binstaller` in `.tool-versions` or `mise.toml` (1e) |
+| `setup-release-toolchain` fails: tool not declared | required tool missing from mise config | declare `go`/`goreleaser` in `.tool-versions` or `mise.toml`, and `binstaller` in `mise.toml` (it needs `[tool_alias]` + `rename_exe`, unexpressible in `.tool-versions`) (1e) |
 | Publish gate silently absent | `automation`/`release` auto-created ungated | create them with protection rules *before* first run (1a) |
 | homebrew step fails on auth | `HOMEBREW_GITHUB_TOKEN` missing/unscoped, or channel left on | add the env-scoped token, or `disable-homebrew: true` (1b/2b) |
 | npm publish fails: "401 Unauthorized" or OIDC rejection | trusted publisher not configured on npmjs.com, wrong workflow filename, wrong environment name, or wrong repo | configure trusted publisher per package with `release.yml` (caller) + `release` env (2e) |
