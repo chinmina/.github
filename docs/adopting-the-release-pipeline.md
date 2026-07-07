@@ -20,7 +20,7 @@ Answer these before touching any files. Everything downstream keys off them.
 | # | Parameter | Options | How to choose |
 |---|-----------|---------|---------------|
 | 1 | **Toolchain** | `goreleaser-release.yml` | One wrapper for both Go and Bun projects — goreleaser builds either. Declare the toolchain (`go` and/or `bun`) in mise; the wrapper sets it up automatically. |
-| 2 | **Token source** | `app` / `octo-sts` | **`app`** = a GitHub App installation token (App installed + stored `RELEASE_PLEASE_*` secrets). **`octo-sts`** = keyless OIDC, no stored key, trust policies centralised in the owning organisation's `.github`. Choose per repo based on what the owning organisation has set up — the **chinmina** org uses `app`; another organisation may use `octo-sts`. |
+| 2 | **Token source** | `app` / `octo-sts` | **`app`** = a GitHub App installation token (App installed + stored `RELEASE_PLEASE_*` secrets). **`octo-sts`** = keyless OIDC, no stored key, trust policies centralised in the owner's `.github`. Choose per repo based on what the owner (org **or** user) has set up — the **chinmina** org uses `app`; another owner may use `octo-sts`. |
 | 3 | **Channels** | GitHub release (always), binstaller (default on), homebrew (default on), npm (opt-in) | Disable a channel by passing `disable-<channel>: true` to `goreleaser-release.yml`. Each enabled channel that needs a credential is a prerequisite (see Step 1). |
 | 4 | **Repo state** | greenfield / has existing release automation | If the repo already releases via another mechanism, you are **migrating**: the old trigger and the new one must not both run. Disable/delete the old workflow in the same change. |
 
@@ -33,18 +33,44 @@ Record your four answers — later steps say "if `octo-sts` …", "if homebrew o
 None of these live in code; all of them block the first release even when every
 workflow file is correct. Treat this as the migration gate.
 
-### 1a. Environments (always)
+> **Owner = org *or* user.** `<OWNER>` may be a GitHub organisation or a user
+> account; the pipeline works the same either way (octo-sts `scope` and the
+> central `.github` repo are both keyed to the owner login). The **one** place
+> account type matters is verifying the octo-sts App install and discovering the
+> App id — those use org-scoped endpoints that **404 on a user account** (see
+> the callout in 1d/1f). Everywhere else, "owner" covers both.
+
+### 1a. Environments (always) — create *and gate*
 
 Both reusable workflows name an environment. **A named environment that does not
 exist is auto-created _ungated_** — the publish gate then silently does nothing.
-So you must create them *with protection rules* yourself.
+So you must create them *with protection rules* yourself, and "create them" is
+not enough: the tag/branch policy is what actually gates them.
 
-- [ ] Create the **`automation`** environment (runs release-please).
-- [ ] Create the **`release`** environment (runs build/attest/publish).
-- [ ] Add the protection rules you want (required reviewers, branch/tag
-      restrictions) to each.
+```sh
+# automation → gated to the default branch; release → gated to v* tags.
+gh api --method PUT "repos/<OWNER>/<REPO>/environments/automation"
+gh api --method PUT "repos/<OWNER>/<REPO>/environments/release"
+
+# Turn on custom deployment-branch/tag policies for each, then add the policy.
+gh api --method PUT "repos/<OWNER>/<REPO>/environments/automation" \
+  -F 'deployment_branch_policy[protected_branches]=false' \
+  -F 'deployment_branch_policy[custom_branch_policies]=true'
+gh api --method POST "repos/<OWNER>/<REPO>/environments/automation/deployment-branch-policies" \
+  -f 'name=<DEFAULT_BRANCH>' -f 'type=branch'
+
+gh api --method PUT "repos/<OWNER>/<REPO>/environments/release" \
+  -F 'deployment_branch_policy[protected_branches]=false' \
+  -F 'deployment_branch_policy[custom_branch_policies]=true'
+# NOTE the tag policy needs BOTH name=v* AND type=tag.
+gh api --method POST "repos/<OWNER>/<REPO>/environments/release/deployment-branch-policies" \
+  -f 'name=v*' -f 'type=tag'
+```
+
+- [ ] Add any human protection rules you want (required reviewers) on top.
 - [ ] Verify they exist and are gated:
-      `gh api repos/<OWNER>/<REPO>/environments`
+      `gh api repos/<OWNER>/<REPO>/environments` and
+      `gh api repos/<OWNER>/<REPO>/environments/release/deployment-branch-policies`
 
 ### 1b. Secrets (per token source + per channel)
 
@@ -63,21 +89,28 @@ even the Homebrew tap write is a keyless mint (the `release-tap` identity), so
 `HOMEBREW_GITHUB_TOKEN` is *not* needed. binstaller and the GitHub-release
 channel never need a secret (keyless OIDC / `github.token`).
 
-### 1c. Org policy (always — easy to forget)
+### 1c. Actions policy (always — easy to forget)
 
-- [ ] The repo's org **"Allowed actions and reusable workflows"** policy must
+- [ ] The owner's **"Allowed actions and reusable workflows"** policy must
       permit `chinmina/*` (Settings → Actions → General). Without it every
       `uses: chinmina/.github/...` call is blocked before it runs.
 
 ### 1d. octo-sts only
 
-- [ ] The **octo-sts GitHub App** is installed and authorised on the org.
-- [ ] The **central trust policies** exist in the **org's `.github` repo** under
-      `.github/chainguard/` (NOT in the consumer repo — see Step 2c):
+- [ ] The **octo-sts GitHub App** is installed and authorised on the owner.
+- [ ] The **central trust policies** exist in the **owner's `.github` repo**
+      under `.github/chainguard/` (NOT in the consumer repo — see Step 2c):
       `release-please-<repo>`, `release-<repo>`, and (if homebrew on) the shared
-      `release-tap`. They are added via a reviewed PR to `<org>/.github`.
-- [ ] The org's `.github` `main` branch is **protected** (required review, no
+      `release-tap`. They are added via a reviewed PR to `<OWNER>/.github`.
+- [ ] The owner's `.github` `main` branch is **protected** (required review, no
       bypass for the octo-sts app) — this is what makes centralised policy safe.
+
+> **User accounts can't verify the App install.** Listing/enumerating an App
+> installation uses org-scoped endpoints (`/orgs/...`, `admin:org` scope) that
+> **404 on a user account**. So on a user account, treat "the App is installed"
+> as an **assumption to confirm out of band** before the Step 4 smoke test
+> (which is the real proof — it mints against the live policy). Repo-level
+> environment/ruleset APIs are unaffected by account type.
 
 ### 1e. Tool + spec files in the repo (always)
 
@@ -100,14 +133,18 @@ channel never need a secret (keyless OIDC / `github.token`).
       published before any provenance exists; `release-please.yml` validates
       this config **before release-please runs** and **fails the run** if it is
       missing (the pinned action has no `draft` input, so the config is the only
-      place to set it).
+      place to set it). **It MUST also set `"include-component-in-tag": false`**
+      so tags are plain `v<semver>` — the default (`true`) prefixes the component
+      (e.g. `boxed-v0.1.0`), which matches neither `release.yml`'s `v*` trigger
+      nor the `v[0-9]*` ruleset, and `release-please.yml` derives its draft
+      lookup as `v<semver>`. Get this wrong and the release never fires.
 - [ ] **binstaller spec** at `.config/binstaller.yml` *(only if binstaller on)*.
 
 #### Declaring `binstaller`
 
 `binstaller` is the one tool that needs more than a version line, and it **must**
-live in `mise.toml` — the `.tool-versions` format can't express the alias or
-`exe` below. It has **no mise registry short name**, yet
+live in `mise.toml` — the `.tool-versions` format can't express the `[tool_alias]`
+table or the `rename_exe` option below. It has **no mise registry short name**, yet
 `setup-release-toolchain` validates it with `mise ls --current --json` +
 `jq 'has("binstaller")'`, so it must surface under the exact key `binstaller`.
 At the same time `binstaller-install-script` calls the CLI as `binst` (not
@@ -122,19 +159,52 @@ backend gives both at once:
 binstaller = "github:binary-install/binstaller"
 
 [tools]
-binstaller = { version = "0.12.0", exe = "binst" }
+binstaller = { version = "0.12.0", rename_exe = "binst" }
 ```
 
 | Piece | Why it's required |
 |-------|-------------------|
 | `[tool_alias] binstaller = "github:binary-install/binstaller"` | Surfaces the tool under the key `binstaller` so the validator's `has("binstaller")` passes. The raw backend key (`github:binary-install/binstaller`) would surface verbatim and **fail** validation. |
 | `github:` backend | The non-deprecated backend (mise warns `ubi:` is removed in 2027.1.0). It auto-detects the `binst` binary inside the release archive with no extra `matching`/asset config. |
-| `exe = "binst"` | The archive ships a binary named `binst`; without this, mise names the **shim** after the tool (`binstaller`) and the action's `binst` call isn't on `PATH`. |
+| `rename_exe = "binst"` | The archive ships a binary named `binst`; without this, mise names the **shim** after the tool key (`binstaller`) and the action's `binst` call isn't on `PATH`. **Use `rename_exe`, not `exe`** — `exe` is a **ubi-only** option; for the `github:` backend the archive-executable rename field is `rename_exe` (and `bin` is for bare, non-archive binaries). |
 | pinned version (`0.12.0`) | Reproducible installs, consistent with the kit's other pinned tools. |
 
 Use `[tool_alias]`, **not** the deprecated `[alias]` (mise warns on the latter).
 This replaces any brute-force `binst`-by-path workaround — no `PATH` munging or
 post-install steps needed.
+
+### 1f. Repository rulesets & branch protection (confirm on first run)
+
+- [ ] **A `tag creation` ruleset with no bypass actor is a hard blocker.** If a
+      ruleset restricts creating `v*` tags, the minted installation token can't
+      push the tag and the pipeline stalls at "draft, no tag." Add the
+      token-minting **App** as a bypass actor on that **restricting** ruleset
+      (`actor_type: Integration`, `bypass_mode: always`) — the octo-sts App on
+      the octo-sts path, or the chinmina release App on the app path.
+
+      *(GitHub rulesets are additive-only: a second, permissive ruleset can't
+      grant an exception to a restrictive one — bypass must sit on the ruleset
+      that imposes the rule. Verified empirically.)*
+
+      ```sh
+      # Find the restricting ruleset id, then GET-then-PUT the FULL representation
+      # (name/target/enforcement/conditions/rules + the new bypass_actors) — a
+      # partial PUT returns 422.
+      gh api "repos/<OWNER>/<REPO>/rulesets" --jq '.[] | {id,name,target}'
+      gh api "repos/<OWNER>/<REPO>/rulesets/<ID>" > ruleset.json
+      # edit ruleset.json: add
+      #   {"actor_type":"Integration","actor_id":<APP_ID>,"bypass_mode":"always"}
+      # to bypass_actors, then:
+      gh api --method PUT "repos/<OWNER>/<REPO>/rulesets/<ID>" --input ruleset.json
+      ```
+
+      `<APP_ID>` is the App's numeric id. On an **org** you can look it up via
+      `gh api /orgs/<OWNER>/installations` (needs `admin:org`); on a **user
+      account** that 404s, so supply the id from the App's settings page (a
+      human-confirmed input).
+- [ ] **`required_signatures` on `main`** is compatible (release-please's API
+      commits are GitHub-signed) — flag it as a *confirm on first run* item, not
+      a blocker.
 
 ---
 
@@ -219,12 +289,12 @@ jobs:
     secrets: inherit
 ```
 
-### 2c. Trust policies — **octo-sts only**, in the ORG's `.github` repo
+### 2c. Trust policies — **octo-sts only**, in the OWNER's `.github` repo
 
-These do **not** go in the consuming repo. They live in `<ORG>/.github`'s
+These do **not** go in the consuming repo. They live in `<OWNER>/.github`'s
 `.github/chainguard/` (centralised so a compromised consumer workflow cannot
 author its own policy), and are added by a reviewed PR. The reusable workflows
-default the octo-sts `scope` to the org and auto-derive the identity names, so
+default the octo-sts `scope` to the owner and auto-derive the identity names, so
 the consumer's callers carry no octo-sts config.
 
 Add up to three files (filename stem = the identity name). Each job runs in a
@@ -257,7 +327,10 @@ repositories: [<REPO>]
 ```
 
 `release-tap.sts.yaml` (only if homebrew on — **shared**, one for all tap
-publishers; add the repo to the alternation rather than writing a new file):
+publishers). This file is very likely to **already exist** from a sibling repo:
+**edit it if present** — add this repo to the `claim_pattern.repository`
+alternation — rather than writing a new file. Only create it if no tap policy
+exists yet.
 
 ```yaml
 issuer: https://token.actions.githubusercontent.com
@@ -286,14 +359,52 @@ before:
     - <CODEGEN_COMMAND> # e.g. "just generate"; omit the whole block if none
 
 release:
-  draft: true          # leave as draft; the wrapper un-drafts after attestation
-  mode: keep-existing  # fill the release-please draft, don't replace it
-  prerelease: auto     # mark prerelease from a semver pre-release tag
+  draft: true              # leave as draft; the wrapper un-drafts after attestation
+  mode: keep-existing      # fill the release-please draft, don't replace it
+  use_existing_draft: true # REQUIRED: without it goreleaser's GetReleaseByTag
+                           # can't see the release-please draft and creates a
+                           # SECOND release. goreleaser-release.yml preflights
+                           # this and fails the run if it is missing.
+  prerelease: auto         # mark prerelease from a semver pre-release tag
 ```
+
+All three of `draft: true`, `mode: keep-existing`, **and**
+`use_existing_draft: true` are required. `mode: keep-existing` tells goreleaser
+not to replace the release; `use_existing_draft: true` is what lets its
+`GetReleaseByTag` lookup *find* a release that is still a draft. Omit the latter
+and goreleaser silently publishes a duplicate release alongside release-please's
+draft — so the reusable wrapper refuses to run without it.
 
 Run codegen in `before.hooks` rather than the `pre-build` input when it's a
 normal repo build step — keep `pre-build` for things that genuinely belong to the
 release wrapper only.
+
+#### Homebrew — `homebrew_casks:` *(only if the homebrew channel is on)*
+
+Use **`homebrew_casks:`**, not the deprecated `brews:`. The cask needs the
+macOS quarantine-xattr removal hook, the tap token from the environment, and
+`skip_upload: auto` so it is **not** pushed on prerelease tags:
+
+```yaml
+homebrew_casks:
+  - name: <TOOL>
+    repository:
+      owner: <OWNER>
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_GITHUB_TOKEN }}" # app path: PAT; octo-sts: minted tap token
+    # skip publishing the cask on a prerelease. release.prerelease: auto only
+    # marks the RELEASE as prerelease — it does NOT gate the cask push, so
+    # without this an RC tag would publish the cask.
+    skip_upload: auto
+    # remove the macOS quarantine xattr so the binary runs without a Gatekeeper
+    # prompt after `brew install`.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system "xattr", "-dr", "com.apple.quarantine", "#{staged_path}/<TOOL>"
+          end
+```
 
 ### 2e. npm channel — main package and trusted publisher config
 
@@ -597,13 +708,23 @@ keep it intact when binstaller is on.
   `release-please.yml` validates this config before release-please runs and
   fails the run if it is missing, so a misconfigured repo never publishes a
   non-draft release.
-- **goreleaser draft contract**: `release.draft: true` + `mode: keep-existing`.
-  If goreleaser creates its own release or publishes immediately, the
-  attest-before-publish gate is bypassed.
+- **Plain-`v` tag contract**: `release-please-config.json` must set
+  `"include-component-in-tag": false`. The default (`true`) prefixes the tag
+  with the package component (e.g. `boxed-v0.1.0`), which matches neither
+  `release.yml`'s `tags: ["v*"]` trigger nor the `refs/tags/v[0-9]*` ruleset, so
+  the release never fires. `release-please.yml` also derives the draft-lookup
+  tag as `v<semver>` (from the PR title), making the plain `v` tag a hard
+  requirement.
+- **goreleaser draft contract**: `release.draft: true` + `mode: keep-existing` +
+  `use_existing_draft: true` (all three — see Step 2d). Without
+  `use_existing_draft: true` goreleaser can't see release-please's draft and
+  creates a duplicate release, bypassing the attest-before-publish gate;
+  `goreleaser-release.yml` preflights this and fails without it.
 - **Tag-push contract**: the tag must be pushed by the *installation token*
   (the wrapper does this), never `GITHUB_TOKEN`. A `GITHUB_TOKEN`-pushed tag does
   not emit a workflow-triggering event, so `release.yml` never fires.
-- **mise contract**: every tool the wrapper requests must be in `.tool-versions`.
+- **mise contract**: every tool the wrapper requests must be in the mise config
+  (`.tool-versions` or `mise.toml`; `binstaller` requires `mise.toml`).
 - **Environment contract**: `automation` and `release` must exist and be gated
   *before* the first run (Step 1a).
 - **octo-sts subject contract**: `…:environment:automation`, not the bare
@@ -628,7 +749,7 @@ keep it intact when binstaller is on.
          - id: sts
            uses: octo-sts/action@a26b0c6455c7f13316f29a8766287f939e75f6c8 # v1.0.2
            with:
-             scope: ${{ github.repository_owner }}   # the ORG (central policies)
+             scope: ${{ github.repository_owner }}   # the OWNER (central policies)
              identity: release-please-<REPO>         # release-please-<repo>
          - run: gh api user --jq .login   # confirms the minted identity
            env:
@@ -647,18 +768,52 @@ keep it intact when binstaller is on.
    - `gh attestation verify <archive> --owner <OWNER>`
    - `gh attestation verify install.sh --owner <OWNER>` *(if binstaller on)*
 
+### Local pre-flight before the first push *(recommended)*
+
+These catch config errors without burning a real release. None are installed by
+assumption; run them via the pinned invocations below.
+
+- **Workflow lint**: run both via `mise exec <tool>@<version> -- …`, which
+  installs the pinned tool on demand — no prior mise declaration or global
+  install required:
+
+  ```sh
+  mise exec actionlint@1.7.12 -- actionlint
+  mise exec zizmor@1.25.2 -- zizmor .
+  ```
+
+  Run **both**. zizmor (Actions security lint) is the one that's easy to skip,
+  and not running it locally is the most common verification gap — the caller
+  templates carry `# zizmor: ignore[secrets-inherit]` precisely so they pass, so
+  zizmor confirms they still do.
+- **binstaller** *(if on)*: the local acceptance criterion is that
+  **`binst gen` produces `install.sh`** from the committed spec. **`binst check`
+  is expected to 404 before the first release** — it probes for release assets
+  that do not exist yet, so that 404 is *not* a spec error and must not be read
+  as a failure.
+- **binstaller vs `homebrew_casks`** *(if both on)*: `binst` 0.12.0 can't parse
+  `homebrew_casks.binaries` (older embedded goreleaser schema; goreleaser itself
+  accepts it). Workaround for local `binst gen`: run it against a temporary copy
+  of the goreleaser config with the `homebrew_casks:` block stripped, then
+  re-add `repo`/`default_version`/`binaries` to the generated spec and trim it
+  to unix targets (`install.sh` is POSIX-only). The committed config keeps the
+  cask block — this workaround is local-generation only.
+
 ---
 
 ## Step 5 — Failure modes (symptom → cause → fix)
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
-| `release.yml` never runs after the Release PR merges | tag pushed by `GITHUB_TOKEN`, or no installation token minted | use the kit's `release-please.yml` unchanged; check the mint step ran (Step 0.2 secrets / org App) |
-| octo-sts mint fails | App not installed, central policy not merged, `scope` pointing at the repo instead of the org, or `subject` not environment-qualified | install the App + merge the central policy (1d); keep `scope` = org; set `subject: …:environment:<env>` (2c) |
+| `release.yml` never runs after the Release PR merges | tag pushed by `GITHUB_TOKEN`, or no installation token minted | use the kit's `release-please.yml` unchanged; check the mint step ran (Step 0.2 secrets / owner App) |
+| octo-sts mint fails | App not installed, central policy not merged, `scope` pointing at the repo instead of the owner, or `subject` not environment-qualified | install the App + merge the central policy (1d); keep `scope` = owner; set `subject: …:environment:<env>` (2c) |
+| `release.yml` never fires; the draft's tag is component-prefixed (e.g. `boxed-v0.1.0`) | `release-please-config.json` missing `"include-component-in-tag": false` | set `"include-component-in-tag": false` so the tag is plain `v<semver>` (1e) |
+| The minted token can't push the `v*` tag; pipeline stalls at "draft, no tag" | a `tag creation` ruleset restricts the ref with no bypass for the App | add the App as an `Integration`/`bypass_mode: always` bypass actor on the *restricting* ruleset (1f) |
 | Homebrew step fails to auth on the octo-sts path | `release-tap` policy missing the repo, or repo not in the `claim_pattern.repository` alternation | add the repo to the shared `release-tap` policy (2c) |
-| `uses: chinmina/.github/...` blocked | org policy disallows `chinmina/*` | allow `chinmina/*` in org Actions settings (1c) |
+| `uses: chinmina/.github/...` blocked | owner policy disallows `chinmina/*` | allow `chinmina/*` in the owner's Actions settings (1c) |
 | `release-please.yml` fails: "… does not enable draft releases" | `release-please-config.json` missing `"draft": true` | add `"draft": true` to `release-please-config.json` (1e) |
-| Release publishes before attestation / no gate | goreleaser not in draft+keep-existing mode | set `release.draft: true` + `mode: keep-existing` (2d) |
+| Release publishes before attestation / no gate, or a duplicate release appears | goreleaser missing `use_existing_draft: true` (or not in draft+keep-existing mode) | set `release.draft: true` + `mode: keep-existing` + `use_existing_draft: true` (2d) |
+| Homebrew cask published on a prerelease/RC tag | cask block missing `skip_upload: auto` | add `skip_upload: auto` to the `homebrew_casks:` entry (2d) |
 | `setup-release-toolchain` fails: tool not declared | required tool missing from mise config | declare `go`/`goreleaser`/`binstaller` in `.tool-versions` or `mise.toml` (1e) |
 | Publish gate silently absent | `automation`/`release` auto-created ungated | create them with protection rules *before* first run (1a) |
 | homebrew step fails on auth | `HOMEBREW_GITHUB_TOKEN` missing/unscoped, or channel left on | add the env-scoped token, or `disable-homebrew: true` (1b/2b) |
@@ -673,12 +828,12 @@ keep it intact when binstaller is on.
 
 `release-please.yml`: `token-source` (`app`\|`octo-sts`, default `app`),
 `config-file`, `manifest-file`, `sts-identity` (default `release-please-<repo>`),
-`sts-scope` (default org).
+`sts-scope` (default owner).
 
 `goreleaser-release.yml`: `pre-build`, `disable-binstaller`, `disable-homebrew`,
 `disable-npm` (default `true`), `npm-package-name` (required when npm on),
 `npm-main-package-dir` (default `.github/workflows/npm/main`),
-`binstaller-spec`, `token-source` (`app`\|`octo-sts`), `sts-scope` (default org),
+`binstaller-spec`, `token-source` (`app`\|`octo-sts`), `sts-scope` (default owner),
 `sts-release-identity` (default `release-<repo>`), `sts-tap-identity` (default
 `release-tap`). Tool versions (Go, goreleaser, binstaller, optional Bun) are
 read from the consumer's mise config — there are no version inputs.

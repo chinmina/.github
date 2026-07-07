@@ -28,8 +28,9 @@ defaults scope to the org and the identity to `release-please-relic`;
 You also need (not shown — repo-specific): a release-please config + manifest,
 a mise config declaring `go`, `goreleaser`, and `binstaller`, and a committed
 binstaller spec at `.config/binstaller.yml`. `binstaller` must be declared in
-`mise.toml` (not `.tool-versions`) with the `[tool_alias]` + `exe = "binst"`
-block — see [Declaring `binstaller`](../../adopting-the-release-pipeline.md#declaring-binstaller).
+`mise.toml` (not `.tool-versions`) with the `[tool_alias]` + `rename_exe = "binst"`
+block (`rename_exe`, not the ubi-only `exe`) — see
+[Declaring `binstaller`](../../adopting-the-release-pipeline.md#declaring-binstaller).
 
 ## Prerequisite checklist (org-admin — gates the FIRST run)
 
@@ -91,8 +92,10 @@ of the org.
 - The `.sts.yaml` `permissions` / `subject` / `claim_pattern` shape should be
   confirmed against the current octo-sts policy schema on first setup.
 - Homebrew is off for relic today; the `release-tap` policy is pre-provisioned,
-  so enabling it later is just `disable-homebrew:` off + a goreleaser `brews:`
-  block pointing at `<org>/homebrew-tap`.
+  so enabling it later is just `disable-homebrew:` off + a goreleaser
+  `homebrew_casks:` block (not the deprecated `brews:`) pointing at
+  `<org>/homebrew-tap`, with `skip_upload: auto` and the quarantine-xattr
+  removal hook — see [Step 2d](../../adopting-the-release-pipeline.md#2d-goreleaser-config-keys-merge-into-goreleaseryaml).
 - relic's own `README.md` needs the standard `## Installation` (mise + install
   script + manual download blocks — Homebrew off) and `## Verifying releases`
   sections so users can install and verify the attested artifacts the pipeline

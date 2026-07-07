@@ -12,4 +12,7 @@ before:
 release:
   draft: true # leave as draft; the wrapper un-drafts after attestation
   mode: keep-existing # fill the release-please draft, don't replace it
+  use_existing_draft: true # REQUIRED: lets GetReleaseByTag find the still-draft
+    # release-please release; without it goreleaser creates a DUPLICATE release
+    # and goreleaser-release.yml's preflight fails the run.
   prerelease: auto # mark prerelease from a semver pre-release tag (belt-and-braces with the wrapper)
