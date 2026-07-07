@@ -29,7 +29,7 @@
 # so only the reusable workflow's env-targeting job can resolve them). The
 # keyless octo-sts path needs NO secrets, so its callers omit `secrets:` entirely.
 
-name: release-please
+name: Release PR automation
 
 on:
   workflow_call:

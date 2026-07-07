@@ -22,7 +22,7 @@
 # resolve it). The keyless octo-sts path needs NO secrets, so its callers omit
 # `secrets:` entirely.
 
-name: goreleaser release
+name: Release
 
 on:
   workflow_call:
