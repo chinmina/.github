@@ -99,7 +99,10 @@ jobs:
     environment: automation # R34
     permissions:
       contents: read # all writes use the minted installation token, not GITHUB_TOKEN
-      id-token: write # R34: required for the octo-sts OIDC exchange (harmless for the app path)
+      # R34: octo-sts OIDC exchange. Declared on BOTH paths, so every caller must
+      # grant id-token: write (even the app path, where it is unused) — a caller
+      # that omits it fails at STARTUP, not silently.
+      id-token: write
     # Strict bash for every run step (GHA's `bash` keyword gives -e + pipefail
     # but not -u; this is that same definition plus nounset), defined once.
     defaults:

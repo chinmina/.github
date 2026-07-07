@@ -225,10 +225,12 @@ Copy these into the consuming repo, preserving paths, then substitute the
 > **at least** what the reusable workflow's job declares. Set workflow-level
 > `permissions: {}` (default-deny) and put the grant on the `jobs.<id>:` block
 > that calls the reusable workflow — this is the secure-by-default shape and
-> keeps the token off every other job. A workflow-level `permissions: {}` with
-> **no** job grant caps `id-token`/`contents`/`attestations` to nothing, which
-> kills the octo-sts OIDC mint on the very first step. Grant, **on the calling
-> job**:
+> keeps the token off every other job. If the calling job grants **less** than
+> the reusable workflow's job declares, the run **fails at startup** ("workflow
+> file issue") — it does not run tokenless — so the grant is mandatory, not
+> best-effort. Note `id-token: write` is declared on **both** token-source paths,
+> so it is required even on `app` (where it is otherwise unused). Grant, **on the
+> calling job**:
 > - **release-please caller** → `contents: read` + `id-token: write`
 > - **release (goreleaser) caller** → `contents: write` + `id-token: write` + `attestations: write`
 >
@@ -252,10 +254,15 @@ jobs:
   release-please:
     # Caller permissions are a CEILING — a reusable workflow can only DOWNGRADE
     # the GITHUB_TOKEN, never elevate it. Grant at least what the reusable
-    # workflow's job declares; omitting this would starve the octo-sts OIDC mint.
+    # workflow's job declares; a caller that grants LESS fails at STARTUP
+    # ("workflow file issue"), it does not run tokenless — so this grant is
+    # mandatory, not best-effort.
     permissions:
       contents: read
-      id-token: write # octo-sts OIDC token exchange (harmless on the app path)
+      # REQUIRED on BOTH paths: the reusable job declares id-token: write, so the
+      # caller must match it even on the app path (where it is unused) or the run
+      # never starts. Do not trim it.
+      id-token: write
     # app path only: keep the `# zizmor: ignore[secrets-inherit]` trailing
     # comment (inherit is required — see below). octo-sts: delete both the
     # comment and the `secrets:` line.
