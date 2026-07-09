@@ -113,7 +113,7 @@ jobs:
       - name: Mint installation token (GitHub App)
         id: app-token
         if: ${{ inputs.token-source == 'app' }}
-        uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.RELEASE_PLEASE_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_PLEASE_APP_PRIVATE_KEY }}
@@ -124,7 +124,7 @@ jobs:
       - name: Mint installation token (octo-sts)
         id: octo-sts
         if: ${{ inputs.token-source == 'octo-sts' }}
-        uses: octo-sts/action@a26b0c6455c7f13316f29a8766287f939e75f6c8 # v1.0.2
+        uses: octo-sts/action@f603d3be9d8dd9871a265776e625a27b00effe05 # v1.1.1
         with:
           # Org-scoped: the trust policy lives centrally in <org>/.github so a
           # compromised consumer workflow cannot author its own policy.
@@ -151,7 +151,7 @@ jobs:
       # R6: if neither mint step produced a token, fail before release-please.
       - name: Release Please
         id: release
-        uses: googleapis/release-please-action@a02a34c4d625f9be7cb89156071d8567266a2445 # v4.2.0
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
           # The token is selected inline (never re-emitted to an output) so it
           # stays masked.
