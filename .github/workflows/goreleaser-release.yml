@@ -21,6 +21,18 @@
 # environment-scoped, so only the reusable workflow's env-targeting job can
 # resolve it). The keyless octo-sts path needs NO secrets, so its callers omit
 # `secrets:` entirely.
+#
+# Docker / ko image publishing: the wrapper does NOT build, sign, or push images
+# and NEVER sets KO_DOCKER_REPO -- image build/sign/push stay entirely in the
+# consumer's goreleaser (ko + cosign) config, which also selects the target
+# repository (e.g. DockerHub vs the ttl.sh ephemeral store, keyed off CI). The
+# wrapper only offers (a) an optional Docker Hub login before the build and (b)
+# `extra-mise-tools` so signing CLIs like cosign reach PATH. A ko+cosign
+# consumer therefore: declares `cosign` in mise.toml, passes
+# `extra-mise-tools: cosign`, passes `docker-username: ${{ vars.DOCKERHUB_USER }}`,
+# and delivers DOCKERHUB_TOKEN (release-environment scoped) via `secrets: inherit`.
+# Login defaults on but self-skips without a username, so credential-less
+# consumers are unaffected.
 
 name: Release
 
@@ -39,6 +51,18 @@ on:
           Homebrew tap write token. Required only for token-source "app" with
           homebrew enabled; consumed by the release job in the `release`
           environment. The octo-sts path mints the tap token instead.
+        required: false
+      # Container-registry (Docker Hub) password/token. Same delivery model as
+      # HOMEBREW_GITHUB_TOKEN: ENVIRONMENT-scoped to `release`, so a narrowed
+      # caller `secrets:` map would resolve EMPTY -- the caller delivers it with
+      # `secrets: inherit`. Only used by the optional login step below, which is
+      # itself gated on a non-empty docker-username, so credential-less consumers
+      # never reference it.
+      DOCKERHUB_TOKEN:
+        description: >-
+          Container-registry (Docker Hub) password or access token. Required
+          only when Docker login is enabled (default) AND docker-username is
+          set; consumed by the login step in the `release` environment.
         required: false
     inputs:
       pre-build:
@@ -116,6 +140,38 @@ on:
         required: false
         type: string
         default: .github/workflows/npm/main
+      extra-mise-tools:
+        description: >-
+          Additional whitespace-separated tool NAMES (e.g. "cosign") to install
+          via mise for the release job, appended to the built-in set
+          (goreleaser[, binstaller]). Names only: the version is taken from the
+          consumer's mise.toml, which is the sole version authority -- a
+          `name@version` here will FAIL the toolchain check. Each name must be
+          declared in mise.toml (pinned + trusted) AND listed here (explicitly
+          installed for release); declaration alone does not install it. Use
+          this to put signing CLIs like cosign on PATH for goreleaser's ko /
+          docker signing.
+        required: false
+        type: string
+        default: ""
+      disable-docker-login:
+        description: >-
+          Skip the container-registry (Docker Hub) login step. Login defaults
+          ON but self-skips when docker-username is empty, so set this only to
+          force login off explicitly.
+        required: false
+        type: boolean
+        default: false
+      docker-username:
+        description: >-
+          Container-registry (Docker Hub) username. Passed as an input, not a
+          secret (chinmina stores it as the repo/environment variable
+          DOCKERHUB_USER, so callers pass docker-username with the value of
+          vars.DOCKERHUB_USER). When empty, the login step is skipped even
+          though login defaults on.
+        required: false
+        type: string
+        default: ""
 
 # No workflow-level GITHUB_TOKEN scope: the release job declares exactly the
 # scopes it needs.
@@ -152,7 +208,7 @@ jobs:
       - name: Set up release toolchain
         uses: chinmina/.github/.github/actions/setup-release-toolchain@verified-actions
         with:
-          mise-tools: goreleaser ${{ inputs.disable-binstaller && '' || 'binstaller' }}
+          mise-tools: goreleaser ${{ inputs.disable-binstaller && '' || 'binstaller' }} ${{ inputs.extra-mise-tools }}
 
       # The hook is consumer-provided shell. Pass it through env and execute at
       # runtime (never expand it into the script text) to avoid template injection.
@@ -230,6 +286,20 @@ jobs:
             exit 1
           fi
           echo "npm inputs validated: package=${NPM_PACKAGE_NAME}, main-dir=${NPM_MAIN_PACKAGE_DIR}"
+
+      # Optional registry auth for the ko / docker publishing done INSIDE
+      # goreleaser. Defaults on, but self-skips without a username so
+      # credential-less consumers are unaffected. No `registry:` -> defaults to
+      # Docker Hub (the ttl.sh ephemeral store needs no auth). The wrapper does
+      # NOT manage KO_DOCKER_REPO -- the consumer's goreleaser config selects
+      # the image repository. Placed after the octo-sts mint steps and before
+      # the build so ordering is stable.
+      - name: Log in to container registry
+        if: ${{ !inputs.disable-docker-login && inputs.docker-username != '' }}
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        with:
+          username: ${{ inputs.docker-username }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       # R8 (build): goreleaser fills the existing release-please draft. The tap
       # token writes the formula to the shared tap; the cask/brew itself is
