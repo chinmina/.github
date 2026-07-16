@@ -1,5 +1,6 @@
 # <org>/relic — build/attest/publish on the v* tag pushed by release-please.
-# Filename kept as release.yml for future npm trusted-publishing compatibility.
+# Filename kept as release.yml so a later npm opt-in needs no rename
+# (npm trusted publishing validates the caller workflow filename).
 name: release
 
 on:
@@ -34,6 +35,10 @@ jobs:
       # publishing an image: drop this, set DOCKERHUB_USER + DOCKERHUB_TOKEN in
       # the release environment, and pass extra-mise-tools: cosign.
       disable-docker-login: true
+      # relic ships no npm package. npm publication defaults ON and fails fast
+      # without npm-package-name, so opt out explicitly. To start publishing to
+      # npm: drop this, set npm-package-name, and commit a main package dir.
+      disable-npm: true
       # templ codegen runs in goreleaser before.hooks, so no pre-build needed.
     # No `secrets:` block: the octo-sts path is keyless. (On the `app` path with
     # homebrew you would add `secrets: inherit` so the environment-scoped
