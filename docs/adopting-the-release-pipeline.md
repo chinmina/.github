@@ -145,6 +145,23 @@ there automatically. Omit it while login is on and the run fails fast.
       the standard rather than guessing a version.
 - [ ] **release-please config + manifest** (`release-please-config.json`,
       `.release-please-manifest.json`) — repo-specific; see release-please docs.
+      A minimal working pair (with every key below already set) is in the
+      [`relic` example](examples/relic/) —
+      [`release-please-config.json`](examples/relic/release-please-config.json)
+      and [`.release-please-manifest.json`](examples/relic/.release-please-manifest.json);
+      the [example README](examples/relic/README.md#relics-release-please-config)
+      annotates each key. Copy that pair rather than writing config from scratch.
+      Beyond the required keys below, it also sets:
+    - **`"pull-request-header"` / `"pull-request-footer"`** — **required, copy
+      verbatim** from the [`relic` example](examples/relic/release-please-config.json).
+      Standard Release PR text shared by all repos; do not customise per repo.
+    - **`"release-type": "simple"`** — track the version in the manifest only, no
+      language version files to rewrite. Prefer this when the version is stamped
+      at build time (e.g. goreleaser ldflags).
+    - **`"initial-version": "<x.y.z>"`** (per package) + a **`{ ".": "0.0.0" }`
+      manifest bootstrap** — pins the *first* release's version; release-please
+      reads `0.0.0` as "unreleased" and maintains the manifest thereafter.
+
       **`release-please-config.json` MUST set `"draft": true`** — this is what
       makes release-please create the GitHub Release as a draft so the wrapper
       can build and attest before publishing. Without it the release would be

@@ -12,6 +12,8 @@ and opts out of homebrew/npm.
 | `.github/workflows/release-please.yml` | `.github/workflows/release-please.yml` |
 | `.github/workflows/release.yml` | `.github/workflows/release.yml` |
 | `goreleaser.snippet.yaml` | merge into `.goreleaser.yaml` |
+| `release-please-config.json` | `release-please-config.json` (repo root) |
+| `.release-please-manifest.json` | `.release-please-manifest.json` (repo root) |
 
 The octo-sts trust policies are **NOT** copied into relic — they live centrally
 in `<org>/.github/.github/chainguard/` so a compromised relic workflow
@@ -25,7 +27,12 @@ defaults scope to the org and the identity to `release-please-relic`;
 `release.yml` (with `token-source: octo-sts`) mints `release-relic`, and
 `release-tap` when homebrew is enabled.
 
-You also need (not shown — repo-specific): a release-please config + manifest,
+The `release-please-config.json` + `.release-please-manifest.json` here are
+relic's actual config, and they carry the non-default keys that matter for this
+pipeline — see [relic's release-please config](#relics-release-please-config)
+below for what each one is doing and why.
+
+You also need (not shown — repo-specific):
 a `mise.toml` declaring `go`, `goreleaser`, and `binstaller`, and a committed
 binstaller spec at `.config/binstaller.yml`. `binstaller` is declared in
 `mise.toml` with the `[tool_alias]` + `rename_exe = "binst"` block (`rename_exe`,
@@ -81,6 +88,31 @@ If this fails, it is almost always one of: (a) the org App not installed;
 `<org>/.github`; (c) the policy `subject` not matching the
 environment-qualified OIDC subject; or (d) `scope` pointing at the repo instead
 of the org.
+
+## relic's release-please config
+
+relic's `release-please-config.json` is minimal but sets several **non-default**
+keys. Required keys are covered in the generic guide's
+[Step 1e](../../adopting-the-release-pipeline.md#1e-tool--spec-files-in-the-repo-always);
+the rest are choices worth copying:
+
+| Key | Value | Why (non-default) |
+|-----|-------|-------------------|
+| `include-component-in-tag` | `false` | **Required.** Default `true` prefixes tags (`relic-v0.1.0`), breaking the `v*` trigger, the `v[0-9]*` ruleset, and the `v<semver>` draft lookup. |
+| `packages.".".draft` | `true` | **Required.** The only place to make the release a draft (the action has no `draft` input); `release-please.yml` fails the run without it. |
+| `pull-request-header` / `pull-request-footer` | fixed text | **Required, copy verbatim.** Standard Release PR text shared by all repos — do not customise per repo. |
+| `release-type` | `simple` | Tracks the version in the manifest only; no language version files to rewrite (goreleaser stamps it via ldflags). Prefer unless you have a versioned file to keep in sync. |
+| `packages.".".initial-version` | `0.1.0` | Pins the **first** release's version (with the `0.0.0` manifest below). |
+
+The manifest bootstraps at `0.0.0`:
+
+```json
+{ ".": "0.0.0" }
+```
+
+release-please reads `0.0.0` as "unreleased" and proposes `initial-version`
+(`0.1.0`) as the first Release PR, then maintains the file itself — don't
+hand-edit it after.
 
 ## Notes
 
