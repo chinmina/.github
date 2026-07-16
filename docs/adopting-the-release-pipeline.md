@@ -21,7 +21,7 @@ Answer these before touching any files. Everything downstream keys off them.
 |---|-----------|---------|---------------|
 | 1 | **Toolchain** | `goreleaser-release.yml` | One wrapper for both Go and Bun projects — goreleaser builds either. Declare the toolchain (`go` and/or `bun`) in mise; the wrapper sets it up automatically. |
 | 2 | **Token source** | `app` / `octo-sts` | **`app`** = a GitHub App installation token (App installed + stored `RELEASE_PLEASE_*` secrets). **`octo-sts`** = keyless OIDC, no stored key, trust policies centralised in the owner's `.github`. Choose per repo based on what the owner (org **or** user) has set up — the **chinmina** org uses `app`; another owner may use `octo-sts`. |
-| 3 | **Channels** | GitHub release (always), binstaller (default on), homebrew (default on), npm (opt-in) | Disable a channel by passing `disable-<channel>: true` to `goreleaser-release.yml`. Each enabled channel that needs a credential is a prerequisite (see Step 1). |
+| 3 | **Channels** | GitHub release (always), binstaller (default on), homebrew (default on), Docker/ko login (default on), npm (opt-in) | Disable a channel by passing `disable-<channel>: true` to `goreleaser-release.yml`. Docker/ko login defaults on and **fails fast** unless the `release` environment defines `DOCKERHUB_USER`; publish no image → pass `disable-docker-login: true`. Each enabled channel that needs a credential is a prerequisite (see Step 1). |
 | 4 | **Repo state** | greenfield / has existing release automation | If the repo already releases via another mechanism, you are **migrating**: the old trigger and the new one must not both run. Disable/delete the old workflow in the same change. |
 
 Record your four answers — later steps say "if `octo-sts` …", "if homebrew on …".
@@ -88,12 +88,20 @@ secrets, so callers omit `secrets:` entirely (and drop the
 | `token-source: app` | `RELEASE_PLEASE_CLIENT_ID` | `automation` |
 | `token-source: app` | `RELEASE_PLEASE_APP_PRIVATE_KEY` | `automation` |
 | homebrew on **and** `token-source: app` | `HOMEBREW_GITHUB_TOKEN` (write to the tap repo) | `release` |
+| Docker/ko login on (default) | `DOCKERHUB_TOKEN` (Docker Hub password/access token) | `release` |
 | npm channel on (`disable-npm: false`) | *(none — OIDC trusted publishing; no stored token needed)* | — |
 
 `token-source: octo-sts` stores **no** secret — that is the point. On that path
 even the Homebrew tap write is a keyless mint (the `release-tap` identity), so
 `HOMEBREW_GITHUB_TOKEN` is *not* needed. binstaller and the GitHub-release
 channel never need a secret (keyless OIDC / `github.token`).
+
+**Variables (not secrets).** Docker login also needs the **username**, which is
+non-sensitive and read from the `vars` context, not `secrets`. Define
+`DOCKERHUB_USER` as a **variable** in the `release` environment (alongside the
+`DOCKERHUB_TOKEN` secret). Unlike secrets, variables need no `inherit` — the
+release job targets the `release` environment, so `vars.DOCKERHUB_USER` resolves
+there automatically. Omit it while login is on and the run fails fast.
 
 ### 1c. Actions policy (always — easy to forget)
 
@@ -129,7 +137,10 @@ channel never need a secret (keyless OIDC / `github.token`).
       own Node 24 + Bun for generation and publishing, independent of your build
       toolchain. **Optional:** `bun`
       (only if the *build* needs it — declaring it makes the toolchain set Bun up;
-      omitting it skips Bun). `setup-release-toolchain` deliberately fails,
+      omitting it skips Bun); and `cosign` when goreleaser signs container images
+      or binaries — declare it here **and** pass `extra-mise-tools: cosign` in the
+      caller so the wrapper installs it for the release job (declaration alone
+      does not; see Step 2d Docker/ko). `setup-release-toolchain` deliberately fails,
       naming the tool, if a *required* tool is not declared — the toolkit imposes
       the standard rather than guessing a version.
 - [ ] **release-please config + manifest** (`release-please-config.json`,
@@ -319,6 +330,12 @@ jobs:
       disable-npm: <true|false>          # default true — opt in explicitly
       # npm-package-name: "@<OWNER>/<REPO>"  # required when disable-npm: false
       # npm-main-package-dir: ".github/workflows/npm/main"  # default
+      # Docker/ko login defaults ON and FAILS FAST without a DOCKERHUB_USER
+      # variable in the `release` environment. Publish an image? set
+      # DOCKERHUB_USER + DOCKERHUB_TOKEN there and pass extra-mise-tools: cosign.
+      # No image? opt out explicitly:
+      disable-docker-login: <true|false> # default false — set true if no image
+      # extra-mise-tools: cosign         # signing CLIs for goreleaser ko/docker (declare in mise.toml)
       # pre-build: "<shell>"             # only if codegen is NOT in goreleaser before.hooks
     # SECRETS (see 2a for the environment-scoping rationale):
     #  * app + homebrew: keep `secrets: inherit` (HOMEBREW_GITHUB_TOKEN is
@@ -444,6 +461,39 @@ homebrew_casks:
             system "xattr", "-dr", "com.apple.quarantine", "#{staged_path}/<TOOL>"
           end
 ```
+
+#### Docker / ko + cosign — *(only if publishing a container image)*
+
+The wrapper does **not** build, sign, or push images and **never sets
+`KO_DOCKER_REPO`** — all image logic stays in your goreleaser config. The wrapper
+only (a) logs in to Docker Hub before the build (default on) and (b) puts the
+signing CLI on `PATH` when you pass `extra-mise-tools: cosign`. To publish:
+
+- Declare `cosign` in `mise.toml` and pass `extra-mise-tools: cosign` (Step 2b).
+- Define `DOCKERHUB_USER` (variable) + `DOCKERHUB_TOKEN` (secret) in the
+  `release` environment (Step 1b).
+- Select the image repository yourself, keyed off `CI`, so local builds hit the
+  `ttl.sh` ephemeral store and CI hits Docker Hub. Set `KO_DOCKER_REPO` as an
+  env var in your goreleaser step or `mise.toml [env]` — **not** in the wrapper.
+
+Illustrative goreleaser keys (adapt to your image):
+
+```yaml
+kos:
+  - repositories:
+      - "{{ if .Env.KO_DOCKER_REPO }}{{ .Env.KO_DOCKER_REPO }}{{ else }}ttl.sh/<TOOL>{{ end }}"
+    tags: ["{{ .Version }}"]
+    bare: true
+    platforms: ["linux/amd64", "linux/arm64"]
+
+docker_signs:
+  - cmd: cosign
+    args: ["sign", "--yes", "${artifact}@${digest}"]
+    output: true
+```
+
+If you publish no image, pass `disable-docker-login: true` (Step 2b) — otherwise
+the run fails fast at *Validate docker login inputs* because login defaults on.
 
 ### 2e. npm channel — main package and trusted publisher config
 
@@ -763,7 +813,14 @@ keep it intact when binstaller is on.
   (the wrapper does this), never `GITHUB_TOKEN`. A `GITHUB_TOKEN`-pushed tag does
   not emit a workflow-triggering event, so `release.yml` never fires.
 - **mise contract**: every tool the wrapper requests must be declared in
-  `mise.toml` (the kit's single mise config).
+  `mise.toml` (the kit's single mise config). Tools passed via
+  `extra-mise-tools` (e.g. `cosign`) must be declared there too — by **name**
+  only; the version lives in `mise.toml` (a `name@version` fails the check).
+- **Docker login contract**: Docker/ko login defaults on and fails fast at
+  *Validate docker login inputs* unless the `release` environment defines
+  `DOCKERHUB_USER` (paired with `DOCKERHUB_TOKEN`). Repos that publish no image
+  must pass `disable-docker-login: true`. The wrapper never sets
+  `KO_DOCKER_REPO` — the image repository is your goreleaser config's job.
 - **Environment contract**: `automation` and `release` must exist and be gated
   *before* the first run (Step 1a).
 - **octo-sts subject contract**: `…:environment:automation`, not the bare
@@ -856,6 +913,8 @@ assumption; run them via the pinned invocations below.
 | `setup-release-toolchain` fails: tool not declared | required tool missing from `mise.toml` | declare `go`/`goreleaser` (and `binstaller` when on — it needs `[tool_alias]` + `rename_exe`) in `mise.toml` (1e) |
 | Publish gate silently absent | `automation`/`release` auto-created ungated | create them with protection rules *before* first run (1a) |
 | homebrew step fails on auth | `HOMEBREW_GITHUB_TOKEN` missing/unscoped, or channel left on | add the env-scoped token, or `disable-homebrew: true` (1b/2b) |
+| `release.yml` fails at *Validate docker login inputs* | Docker login on (default) but `DOCKERHUB_USER` unset in the `release` environment | set `DOCKERHUB_USER` (variable) + `DOCKERHUB_TOKEN` (secret) in `release`, or `disable-docker-login: true` (1b/2b) |
+| image push fails / lands on `ttl.sh` instead of Docker Hub | `KO_DOCKER_REPO` not set for CI in your goreleaser config | set `KO_DOCKER_REPO` keyed off `CI` in goreleaser/`mise.toml [env]` — the wrapper never sets it (2d) |
 | npm publish fails: "401 Unauthorized" or OIDC rejection | trusted publisher not configured on npmjs.com, wrong workflow filename, wrong environment name, or wrong repo | configure trusted publisher per package with `release.yml` (caller) + `release` env (2e) |
 | npm preflight fails: main package.json missing/nameless | `npm-main-package-dir` wrong, directory not committed, or `package.json` lacks a `name` | commit `.github/workflows/npm/main/package.json` with consumer metadata (2e); no launcher needed |
 | npm preflight fails: no archives found | `dist/artifacts.json` missing or no qualifying Archive entries | ensure goreleaser ran successfully and produced archives before the npm step |
@@ -870,6 +929,7 @@ assumption; run them via the pinned invocations below.
 `sts-scope` (default owner).
 
 `goreleaser-release.yml`: `pre-build`, `disable-binstaller`, `disable-homebrew`,
+`disable-docker-login` (default `false`), `extra-mise-tools` (e.g. `cosign`),
 `disable-npm` (default `true`), `npm-package-name` (required when npm on),
 `npm-main-package-dir` (default `.github/workflows/npm/main`),
 `binstaller-spec`, `token-source` (`app`\|`octo-sts`), `sts-scope` (default owner),
@@ -877,5 +937,5 @@ assumption; run them via the pinned invocations below.
 `release-tap`). Tool versions (Go, goreleaser, binstaller, optional Bun) are
 read from the consumer's mise config — there are no version inputs.
 
-See the [README contracts table](../README.md#workflow-contracts) for the
-authoritative inputs/secrets/permissions per workflow.
+See the [workflow contracts table](release-workflows.md#workflow-contracts) for
+the authoritative inputs/secrets/permissions per workflow.

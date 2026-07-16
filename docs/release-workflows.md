@@ -132,8 +132,9 @@ flowchart TB
 | | |
 |---|---|
 | **Trigger** | consumer's `push: tags: ['v*']` caller |
-| **Inputs** | `pre-build`, `disable-binstaller`, `disable-homebrew`, `binstaller-spec`, `token-source` (`app`\|`octo-sts`), `sts-scope`, `sts-release-identity`, `sts-tap-identity`. Tool versions (Go, goreleaser, binstaller, optional Bun) come from the consumer's mise config — no version inputs. |
-| **Secrets** | via `inherit`: `HOMEBREW_GITHUB_TOKEN` (App path + homebrew only; octo-sts mints the tap token instead) |
+| **Inputs** | `pre-build`, `disable-binstaller`, `disable-homebrew`, `disable-docker-login` (default `false`), `extra-mise-tools`, `binstaller-spec`, `token-source` (`app`\|`octo-sts`), `sts-scope`, `sts-release-identity`, `sts-tap-identity`, `disable-npm`, `npm-package-name`, `npm-main-package-dir`. Tool versions (Go, goreleaser, binstaller, optional Bun/cosign) come from the consumer's mise config — no version inputs. |
+| **Secrets** | via `inherit`: `HOMEBREW_GITHUB_TOKEN` (App path + homebrew only; octo-sts mints the tap token instead); `DOCKERHUB_TOKEN` (Docker/ko login on — the default) |
+| **Variables** | `DOCKERHUB_USER` (Docker/ko login on; read from `vars`, no `inherit` needed) — both scoped to the `release` environment |
 | **Job env** | `release` |
 | **Permissions** | `contents: write`, `id-token: write`, `attestations: write` |
 | **Consumer release-please** | `release-please-config.json` must set `"draft": true` **and** `"include-component-in-tag": false` (validated / relied on by `release-please.yml`; the pinned action has no `draft` input) |

@@ -21,6 +21,24 @@
 # environment-scoped, so only the reusable workflow's env-targeting job can
 # resolve it). The keyless octo-sts path needs NO secrets, so its callers omit
 # `secrets:` entirely.
+#
+# Docker / ko image publishing: the wrapper does NOT build, sign, or push images
+# and NEVER sets KO_DOCKER_REPO -- image build/sign/push stay entirely in the
+# consumer's goreleaser (ko + cosign) config, which also selects the target
+# repository (e.g. DockerHub vs the ttl.sh ephemeral store, keyed off CI). The
+# wrapper only offers (a) an optional Docker Hub login before the build and (b)
+# `extra-mise-tools` so signing CLIs like cosign reach PATH. A ko+cosign
+# consumer therefore: declares `cosign` in mise.toml, passes
+# `extra-mise-tools: cosign`, and configures the `release` environment with the
+# DOCKERHUB_USER variable and the DOCKERHUB_TOKEN secret (the latter delivered
+# via `secrets: inherit`). The wrapper reads the username from vars.DOCKERHUB_USER
+# directly -- the release job targets the caller's `release` environment, so both
+# the variable and the secret resolve there.
+# Login defaults ON ("login unless opted out"): a consumer that does NOT publish
+# an image MUST opt out with `disable-docker-login: true`. Leaving login on
+# without a DOCKERHUB_USER variable is a misconfiguration the job rejects up front
+# (see the "Validate docker login inputs" step) rather than skipping silently
+# and failing opaquely later in goreleaser's push.
 
 name: Release
 
@@ -39,6 +57,19 @@ on:
           Homebrew tap write token. Required only for token-source "app" with
           homebrew enabled; consumed by the release job in the `release`
           environment. The octo-sts path mints the tap token instead.
+        required: false
+      # Container-registry (Docker Hub) password/token. Same delivery model as
+      # HOMEBREW_GITHUB_TOKEN: ENVIRONMENT-scoped to `release`, so a narrowed
+      # caller `secrets:` map would resolve EMPTY -- the caller delivers it with
+      # `secrets: inherit`. Its paired username is the release-environment
+      # variable DOCKERHUB_USER (read via the vars context, no inherit needed).
+      # Only used by the login step below, gated on `disable-docker-login`.
+      DOCKERHUB_TOKEN:
+        description: >-
+          Container-registry (Docker Hub) password or access token. Required
+          when Docker login is enabled (the default); paired with the
+          DOCKERHUB_USER variable and consumed by the login step in the
+          `release` environment.
         required: false
     inputs:
       pre-build:
@@ -116,6 +147,30 @@ on:
         required: false
         type: string
         default: .github/workflows/npm/main
+      extra-mise-tools:
+        description: >-
+          Additional whitespace-separated tool NAMES (e.g. "cosign") to install
+          via mise for the release job, appended to the built-in set
+          (goreleaser[, binstaller]). Names only: the version is taken from the
+          consumer's mise.toml, which is the sole version authority -- a
+          `name@version` here will FAIL the toolchain check. Each name must be
+          declared in mise.toml (pinned + trusted) AND listed here (explicitly
+          installed for release); declaration alone does not install it. Use
+          this to put signing CLIs like cosign on PATH for goreleaser's ko /
+          docker signing.
+        required: false
+        type: string
+        default: ""
+      disable-docker-login:
+        description: >-
+          Opt out of the container-registry (Docker Hub) login step. Login
+          defaults ON, so projects that publish NO container image must set
+          this true. When false (default), the release environment must define
+          the DOCKERHUB_USER variable (and DOCKERHUB_TOKEN secret); the job
+          fails fast if DOCKERHUB_USER is missing.
+        required: false
+        type: boolean
+        default: false
 
 # No workflow-level GITHUB_TOKEN scope: the release job declares exactly the
 # scopes it needs.
@@ -144,6 +199,41 @@ jobs:
           fetch-depth: 0 # goreleaser needs full history + tags
           persist-credentials: false # goreleaser/gh use GITHUB_TOKEN env, not git creds
 
+      # Fail fast on Docker misconfiguration, before any toolchain install or
+      # build work. Login is on by default, so a consumer that has not opted out
+      # MUST define the DOCKERHUB_USER variable in the release environment.
+      # Skipping silently would let the release run unauthenticated and fail
+      # opaquely later in goreleaser's ko push; projects that publish no image
+      # pass disable-docker-login: true instead.
+      - name: Validate docker login inputs
+        if: ${{ !inputs.disable-docker-login && vars.DOCKERHUB_USER == '' }}
+        run: |
+          echo "::error::Docker login is enabled but the DOCKERHUB_USER variable is not set in the release environment. Define it (alongside the DOCKERHUB_TOKEN secret), or pass disable-docker-login: true if this project publishes no container image."
+          exit 1
+
+      # release.draft and release.use_existing_draft must both be set so
+      # goreleaser fills release-please's existing draft instead of creating a
+      # second release. Config-only check (needs just the checkout + runner yq),
+      # so it runs before the toolchain install / token mints to fail fast.
+      - name: Require use_existing_draft in the goreleaser config
+        run: |
+          config=""
+          for candidate in .config/goreleaser.yml .config/goreleaser.yaml .goreleaser.yml .goreleaser.yaml goreleaser.yml goreleaser.yaml; do
+            if [[ -f "${candidate}" ]]; then
+              config="${candidate}"
+              break
+            fi
+          done
+          if [[ -z "${config}" ]]; then
+            echo "::error::No goreleaser config found. Add one that sets release.draft: true and release.use_existing_draft: true."
+            exit 1
+          fi
+          if [[ "$(yq '(.release.draft == true) and (.release.use_existing_draft == true)' "${config}")" != "true" ]]; then
+            echo "::error::${config} must set release.draft: true and release.use_existing_draft: true. Both are required so the release-please draft is reused instead of a second release being created."
+            exit 1
+          fi
+          echo "Confirmed ${config} sets release.draft and release.use_existing_draft."
+
       # One upfront toolchain install: the mise CLIs the enabled channels need
       # (goreleaser, plus binstaller when its channel is on) in a single cached
       # pass. Go and/or Bun are set up via their setup actions from whatever the
@@ -152,7 +242,7 @@ jobs:
       - name: Set up release toolchain
         uses: chinmina/.github/.github/actions/setup-release-toolchain@verified-actions
         with:
-          mise-tools: goreleaser ${{ inputs.disable-binstaller && '' || 'binstaller' }}
+          mise-tools: goreleaser ${{ inputs.disable-binstaller && '' || 'binstaller' }} ${{ inputs.extra-mise-tools }}
 
       # The hook is consumer-provided shell. Pass it through env and execute at
       # runtime (never expand it into the script text) to avoid template injection.
@@ -183,28 +273,6 @@ jobs:
           scope: ${{ inputs.sts-scope != '' && inputs.sts-scope || github.repository_owner }}
           identity: ${{ inputs.sts-tap-identity }}
 
-      # release.draft and release.use_existing_draft must both be set so
-      # goreleaser fills release-please's existing draft instead of creating a
-      # second release.
-      - name: Require use_existing_draft in the goreleaser config
-        run: |
-          config=""
-          for candidate in .config/goreleaser.yml .config/goreleaser.yaml .goreleaser.yml .goreleaser.yaml goreleaser.yml goreleaser.yaml; do
-            if [[ -f "${candidate}" ]]; then
-              config="${candidate}"
-              break
-            fi
-          done
-          if [[ -z "${config}" ]]; then
-            echo "::error::No goreleaser config found. Add one that sets release.draft: true and release.use_existing_draft: true."
-            exit 1
-          fi
-          if [[ "$(yq '(.release.draft == true) and (.release.use_existing_draft == true)' "${config}")" != "true" ]]; then
-            echo "::error::${config} must set release.draft: true and release.use_existing_draft: true. Both are required so the release-please draft is reused instead of a second release being created."
-            exit 1
-          fi
-          echo "Confirmed ${config} sets release.draft and release.use_existing_draft."
-
       # R31: when npm is on, validate required inputs before goreleaser runs so
       # misconfiguration fails fast rather than after a full build.
       - name: Validate npm inputs
@@ -230,6 +298,22 @@ jobs:
             exit 1
           fi
           echo "npm inputs validated: package=${NPM_PACKAGE_NAME}, main-dir=${NPM_MAIN_PACKAGE_DIR}"
+
+      # Registry auth for the ko / docker publishing done INSIDE goreleaser.
+      # Enabled by default; the "Validate docker login inputs" step above has
+      # already guaranteed DOCKERHUB_USER is set unless login was opted out, so
+      # this runs whenever login is on. Username + token both resolve from the
+      # caller's `release` environment (vars + secrets). No `registry:` ->
+      # defaults to Docker Hub (the ttl.sh ephemeral store needs no auth). The
+      # wrapper does NOT manage KO_DOCKER_REPO -- the consumer's goreleaser
+      # config selects the image repository. Placed after the octo-sts mint
+      # steps and before the build so ordering is stable.
+      - name: Log in to container registry
+        if: ${{ !inputs.disable-docker-login }}
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        with:
+          username: ${{ vars.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       # R8 (build): goreleaser fills the existing release-please draft. The tap
       # token writes the formula to the shared tap; the cask/brew itself is
