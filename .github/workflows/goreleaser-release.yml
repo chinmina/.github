@@ -31,8 +31,11 @@
 # consumer therefore: declares `cosign` in mise.toml, passes
 # `extra-mise-tools: cosign`, passes `docker-username: ${{ vars.DOCKERHUB_USER }}`,
 # and delivers DOCKERHUB_TOKEN (release-environment scoped) via `secrets: inherit`.
-# Login defaults on but self-skips without a username, so credential-less
-# consumers are unaffected.
+# Login defaults ON ("login unless opted out"): a consumer that does NOT publish
+# an image MUST opt out with `disable-docker-login: true`. Leaving login on
+# without a `docker-username` is a misconfiguration the job rejects up front
+# (see the "Validate docker login inputs" step) rather than skipping silently
+# and failing opaquely later in goreleaser's push.
 
 name: Release
 
@@ -156,9 +159,10 @@ on:
         default: ""
       disable-docker-login:
         description: >-
-          Skip the container-registry (Docker Hub) login step. Login defaults
-          ON but self-skips when docker-username is empty, so set this only to
-          force login off explicitly.
+          Opt out of the container-registry (Docker Hub) login step. Login
+          defaults ON, so projects that publish NO container image must set
+          this true. When false (default), docker-username is required and the
+          job fails fast if it is missing.
         required: false
         type: boolean
         default: false
@@ -167,8 +171,8 @@ on:
           Container-registry (Docker Hub) username. Passed as an input, not a
           secret (chinmina stores it as the repo/environment variable
           DOCKERHUB_USER, so callers pass docker-username with the value of
-          vars.DOCKERHUB_USER). When empty, the login step is skipped even
-          though login defaults on.
+          vars.DOCKERHUB_USER). Required whenever login is enabled (the
+          default); the job fails fast if it is empty and login is not disabled.
         required: false
         type: string
         default: ""
@@ -199,6 +203,18 @@ jobs:
         with:
           fetch-depth: 0 # goreleaser needs full history + tags
           persist-credentials: false # goreleaser/gh use GITHUB_TOKEN env, not git creds
+
+      # Fail fast on Docker misconfiguration, before any toolchain install or
+      # build work. Login is on by default, so a consumer that has not opted out
+      # MUST supply a username (the Docker Hub user, via vars.DOCKERHUB_USER).
+      # Skipping silently would let the release run unauthenticated and fail
+      # opaquely later in goreleaser's ko push; projects that publish no image
+      # pass disable-docker-login: true instead.
+      - name: Validate docker login inputs
+        if: ${{ !inputs.disable-docker-login && inputs.docker-username == '' }}
+        run: |
+          echo "::error::Docker login is enabled but docker-username is empty. Set docker-username (e.g. vars.DOCKERHUB_USER), or pass disable-docker-login: true if this project publishes no container image."
+          exit 1
 
       # One upfront toolchain install: the mise CLIs the enabled channels need
       # (goreleaser, plus binstaller when its channel is on) in a single cached
@@ -287,15 +303,16 @@ jobs:
           fi
           echo "npm inputs validated: package=${NPM_PACKAGE_NAME}, main-dir=${NPM_MAIN_PACKAGE_DIR}"
 
-      # Optional registry auth for the ko / docker publishing done INSIDE
-      # goreleaser. Defaults on, but self-skips without a username so
-      # credential-less consumers are unaffected. No `registry:` -> defaults to
-      # Docker Hub (the ttl.sh ephemeral store needs no auth). The wrapper does
-      # NOT manage KO_DOCKER_REPO -- the consumer's goreleaser config selects
-      # the image repository. Placed after the octo-sts mint steps and before
-      # the build so ordering is stable.
+      # Registry auth for the ko / docker publishing done INSIDE goreleaser.
+      # Enabled by default; the "Validate docker login inputs" step above has
+      # already guaranteed a username is present unless login was opted out, so
+      # this runs whenever login is on. No `registry:` -> defaults to Docker Hub
+      # (the ttl.sh ephemeral store needs no auth). The wrapper does NOT manage
+      # KO_DOCKER_REPO -- the consumer's goreleaser config selects the image
+      # repository. Placed after the octo-sts mint steps and before the build so
+      # ordering is stable.
       - name: Log in to container registry
-        if: ${{ !inputs.disable-docker-login && inputs.docker-username != '' }}
+        if: ${{ !inputs.disable-docker-login }}
         uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
         with:
           username: ${{ inputs.docker-username }}
