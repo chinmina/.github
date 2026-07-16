@@ -127,16 +127,17 @@ on:
         default: release-tap
       disable-npm:
         description: >-
-          Skip npm publication (R31). Defaults to true — consumers opt in
-          explicitly. When false, npm-package-name is required.
+          Opt out of npm publication (R31). Publication defaults ON, so projects
+          that publish NO npm package must set this true. When false (default),
+          npm-package-name is required.
         required: false
         type: boolean
-        default: true
+        default: false
       npm-package-name:
         description: >-
           npm package name for the main shim (e.g. @jamestelfer/sandy). Platform
           packages are named by appending -{os}-{cpu}. Required when disable-npm
-          is false.
+          is false (the default).
         required: false
         type: string
         default: ""
@@ -286,7 +287,7 @@ jobs:
             exit 1
           fi
           if [[ ! -d "$NPM_MAIN_PACKAGE_DIR" ]]; then
-            echo "::error::npm-main-package-dir '${NPM_MAIN_PACKAGE_DIR}' not found. Create it or set disable-npm: true."
+            echo "::error::npm-main-package-dir '${NPM_MAIN_PACKAGE_DIR}' not found. Create it or opt out with disable-npm: true."
             exit 1
           fi
           if [[ ! -f "${NPM_MAIN_PACKAGE_DIR}/package.json" ]]; then

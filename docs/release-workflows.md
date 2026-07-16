@@ -21,9 +21,8 @@ first-party kit references ride `@verified-actions` (encoded as zizmor policy in
 | [`binstaller-install-script`](../.github/actions/binstaller-install-script/) | composite | Generate + attach an attestable `install.sh`. |
 
 > One `goreleaser-release.yml` covers both Go and Bun projects — goreleaser
-> builds both, so there is no separate Bun wrapper. The npm channel
-> (`npm-publish-binaries`) lands in a later phase; this set covers the
-> goreleaser + binstaller path.
+> builds both, so there is no separate Bun wrapper. The npm channel is on by
+> default (via the `npm-publish` action); opt out with `disable-npm: true`.
 
 ## Token sources
 
@@ -132,7 +131,7 @@ flowchart TB
 | | |
 |---|---|
 | **Trigger** | consumer's `push: tags: ['v*']` caller |
-| **Inputs** | `pre-build`, `disable-binstaller`, `disable-homebrew`, `disable-docker-login` (default `false`), `extra-mise-tools`, `binstaller-spec`, `token-source` (`app`\|`octo-sts`), `sts-scope`, `sts-release-identity`, `sts-tap-identity`, `disable-npm`, `npm-package-name`, `npm-main-package-dir`. Tool versions (Go, goreleaser, binstaller, optional Bun/cosign) come from the consumer's mise config — no version inputs. |
+| **Inputs** | `pre-build`, `disable-binstaller`, `disable-homebrew`, `disable-docker-login` (default `false`), `extra-mise-tools`, `binstaller-spec`, `token-source` (`app`\|`octo-sts`), `sts-scope`, `sts-release-identity`, `sts-tap-identity`, `disable-npm` (default `false` — npm on), `npm-package-name` (required unless npm off), `npm-main-package-dir`. Tool versions (Go, goreleaser, binstaller, optional Bun/cosign) come from the consumer's mise config — no version inputs. |
 | **Secrets** | via `inherit`: `HOMEBREW_GITHUB_TOKEN` (App path + homebrew only; octo-sts mints the tap token instead); `DOCKERHUB_TOKEN` (Docker/ko login on — the default) |
 | **Variables** | `DOCKERHUB_USER` (Docker/ko login on; read from `vars`, no `inherit` needed) — both scoped to the `release` environment |
 | **Job env** | `release` |
