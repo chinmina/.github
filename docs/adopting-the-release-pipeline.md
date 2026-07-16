@@ -877,5 +877,5 @@ assumption; run them via the pinned invocations below.
 `release-tap`). Tool versions (Go, goreleaser, binstaller, optional Bun) are
 read from the consumer's mise config — there are no version inputs.
 
-See the [README contracts table](../README.md#workflow-contracts) for the
-authoritative inputs/secrets/permissions per workflow.
+See the [workflow contracts table](release-workflows.md#workflow-contracts) for
+the authoritative inputs/secrets/permissions per workflow.
