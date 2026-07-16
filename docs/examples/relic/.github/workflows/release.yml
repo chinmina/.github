@@ -29,6 +29,11 @@ jobs:
       # disable-homebrew off to start using the (already-provisioned) release-tap
       # mint + tap policy.
       disable-homebrew: true
+      # relic ships no container image; Docker/ko login defaults ON and fails
+      # fast without a DOCKERHUB_USER variable, so opt out explicitly. To start
+      # publishing an image: drop this, set DOCKERHUB_USER + DOCKERHUB_TOKEN in
+      # the release environment, and pass extra-mise-tools: cosign.
+      disable-docker-login: true
       # templ codegen runs in goreleaser before.hooks, so no pre-build needed.
     # No `secrets:` block: the octo-sts path is keyless. (On the `app` path with
     # homebrew you would add `secrets: inherit` so the environment-scoped

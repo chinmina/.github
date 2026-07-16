@@ -319,6 +319,12 @@ jobs:
       disable-npm: <true|false>          # default true — opt in explicitly
       # npm-package-name: "@<OWNER>/<REPO>"  # required when disable-npm: false
       # npm-main-package-dir: ".github/workflows/npm/main"  # default
+      # Docker/ko login defaults ON and FAILS FAST without a DOCKERHUB_USER
+      # variable in the `release` environment. Publish an image? set
+      # DOCKERHUB_USER + DOCKERHUB_TOKEN there and pass extra-mise-tools: cosign.
+      # No image? opt out explicitly:
+      disable-docker-login: <true|false> # default false — set true if no image
+      # extra-mise-tools: cosign         # signing CLIs for goreleaser ko/docker (declare in mise.toml)
       # pre-build: "<shell>"             # only if codegen is NOT in goreleaser before.hooks
     # SECRETS (see 2a for the environment-scoping rationale):
     #  * app + homebrew: keep `secrets: inherit` (HOMEBREW_GITHUB_TOKEN is
