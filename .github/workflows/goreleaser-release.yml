@@ -235,6 +235,33 @@ jobs:
           fi
           echo "Confirmed ${config} sets release.draft and release.use_existing_draft."
 
+      # Resolve the binstaller channel's boolean input into a structured JSON
+      # payload ({enabled, requiredTools, installSubject}) once, so downstream
+      # steps read typed values via fromJSON instead of re-deriving them with the
+      # fragile `cond && '' || X` expression idiom (the empty-string true-branch
+      # is falsy and silently falls through to the || branch). fromJSON().enabled
+      # is a real boolean, avoiding the truthy-"false" string trap in `if:`.
+      - name: Normalize channel inputs
+        id: channels
+        env:
+          DISABLE_BINSTALLER: ${{ inputs.disable-binstaller }}
+        run: |
+          if [[ "${DISABLE_BINSTALLER}" == "true" ]]; then
+            enabled=false
+            required_tools=""
+            install_subject=""
+          else
+            enabled=true
+            required_tools="binstaller"
+            install_subject="install.sh"
+          fi
+          binstaller=$(jq -cn \
+            --argjson enabled "${enabled}" \
+            --arg requiredTools "${required_tools}" \
+            --arg installSubject "${install_subject}" \
+            '{enabled: $enabled, requiredTools: $requiredTools, installSubject: $installSubject}')
+          echo "binstaller=${binstaller}" >> "$GITHUB_OUTPUT"
+
       # One upfront toolchain install: the mise CLIs the enabled channels need
       # (goreleaser, plus binstaller when its channel is on) in a single cached
       # pass. Go and/or Bun are set up via their setup actions from whatever the
@@ -243,7 +270,7 @@ jobs:
       - name: Set up release toolchain
         uses: chinmina/.github/.github/actions/setup-release-toolchain@verified-actions
         with:
-          mise-tools: goreleaser ${{ inputs.disable-binstaller && '' || 'binstaller' }} ${{ inputs.extra-mise-tools }}
+          mise-tools: goreleaser ${{ fromJSON(steps.channels.outputs.binstaller).requiredTools }} ${{ inputs.extra-mise-tools }}
 
       # The hook is consumer-provided shell. Pass it through env and execute at
       # runtime (never expand it into the script text) to avoid template injection.
@@ -322,13 +349,13 @@ jobs:
       - name: Build (goreleaser)
         env:
           GITHUB_TOKEN: ${{ inputs.token-source == 'octo-sts' && steps.release-token.outputs.token || github.token }}
-          HOMEBREW_GITHUB_TOKEN: ${{ inputs.disable-homebrew && '' || (inputs.token-source == 'octo-sts' && steps.tap-token.outputs.token || secrets.HOMEBREW_GITHUB_TOKEN) }}
+          HOMEBREW_GITHUB_TOKEN: ${{ !inputs.disable-homebrew && (inputs.token-source == 'octo-sts' && steps.tap-token.outputs.token || secrets.HOMEBREW_GITHUB_TOKEN) || '' }}
         run: goreleaser release --clean
 
       # Channel: binstaller. Generate install.sh (attested below, published with
       # the release). binst is already on PATH from the upfront toolchain step.
       - name: Generate install script
-        if: ${{ !inputs.disable-binstaller }}
+        if: ${{ fromJSON(steps.channels.outputs.binstaller).enabled }}
         uses: chinmina/.github/.github/actions/binstaller-install-script@verified-actions
         with:
           spec: ${{ inputs.binstaller-spec }}
@@ -340,7 +367,7 @@ jobs:
         uses: chinmina/.github/.github/actions/attest-artifacts@verified-actions
         with:
           checksums-file: dist/checksums.txt
-          extra-subject-path: ${{ inputs.disable-binstaller && '' || 'install.sh' }}
+          extra-subject-path: ${{ fromJSON(steps.channels.outputs.binstaller).installSubject }}
 
       # R31/R32/R33: publish npm packages via OIDC trusted publishing (no stored
       # token). Runs after goreleaser (dist/ exists) and after attestation, but
