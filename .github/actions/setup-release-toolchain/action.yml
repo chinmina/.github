@@ -34,7 +34,7 @@ runs:
     # cache per tool). reshim writes the shims dir to $GITHUB_PATH so the CLIs
     # resolve in later steps.
     - name: Install mise + CLIs
-      uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2.4.4
+      uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea # v4.2.1
       with:
         install_args: ${{ inputs.mise-tools }}
         reshim: true
@@ -84,7 +84,7 @@ runs:
     # repo declares Go (R18).
     - name: Set up Go
       if: ${{ steps.versions.outputs.go_version != '' }}
-      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
         go-version: ${{ steps.versions.outputs.go_version }}
 
@@ -100,6 +100,6 @@ runs:
     # so that credential configuration is scoped to the publish step only.
     - name: Set up Node
       if: ${{ steps.versions.outputs.node_version != '' }}
-      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
       with:
         node-version: ${{ steps.versions.outputs.node_version }}
