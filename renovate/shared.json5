@@ -40,7 +40,7 @@
       "description": "Group non-runtime mise updates, without mixing major and non-major releases.",
       "matchManagers": ["mise"],
       "excludeDepNames": ["go"],
-      "groupName": "mise",
+      "groupName": "Mise packages",
       "separateMajorMinor": true,
       "separateMultipleMajor": true
     },
