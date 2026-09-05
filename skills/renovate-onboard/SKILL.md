@@ -3,101 +3,81 @@ name: renovate-onboard
 description: >
   Onboard or update a repository's root renovate.json5 to extend the shared
   chinmina config at renovate/shared.json5 in this repo. Use when asked to
-  "onboard renovate", add/create a repo's renovate.json5, or when reviewing
-  an existing renovate.json5 (e.g. in chinmina-bridge or kms-import) for
-  rules that clash with or duplicate the shared config.
+  onboard renovate, create/add a repo's renovate.json5, or review/migrate an
+  existing renovate.json5 for rules that clash with or duplicate the shared
+  config.
 ---
 
 # Renovate onboarding
 
 This repo (`chinmina/.github`) hosts a shared Renovate config at
-[`renovate/shared.json5`](../../renovate/shared.json5). Individual chinmina
-repositories should extend it from their own root `renovate.json5` rather
-than re-declaring the same rules locally.
+`renovate/shared.json5`. Target repos extend it from their own root
+`renovate.json5` instead of re-declaring the same rules locally.
 
-## Creating a new renovate.json5
+Before doing anything else, read the current contents of
+`renovate/shared.json5` in this repo (or fetch it via
+`github>chinmina/.github//renovate/shared.json5` if working outside this
+checkout). Do not rely on memory or on any copy of its contents written
+elsewhere (including in this skill file) — it changes over time and this
+file is not a mirror of it.
 
-In the target repo, create (or replace) `renovate.json5` at the root:
+## Creating or replacing a repo's renovate.json5
 
-```json5
-{
-  $schema: "https://docs.renovatebot.com/renovate-schema.json",
-  extends: [
-    "github>chinmina/.github//renovate/shared.json5",
-  ],
-}
-```
+1. Read `renovate/shared.json5` to know what it currently sets.
+2. Write the target repo's root `renovate.json5` with, at minimum:
+   ```json5
+   {
+     $schema: "https://docs.renovatebot.com/renovate-schema.json",
+     extends: [
+       "github>chinmina/.github//renovate/shared.json5",
+     ],
+   }
+   ```
+3. Add repo-specific config (extra `packageRules`, `regexManagers`, ignored
+   deps, per-dependency overrides) only on top of the `extends` array, and
+   only for things that are genuinely specific to this repo.
+4. If a repo-specific rule looks broadly useful (e.g. a grouping convention
+   other repos would also want), propose adding it to
+   `renovate/shared.json5` instead of duplicating it locally.
 
-- Reference the shared config using Renovate's repo-preset syntax:
-  `github>chinmina/.github//renovate/shared.json5`. Do not copy its contents
-  into the repo — the whole point is a single source of truth.
-- Only add repo-specific config on top of the `extends` array: extra
-  `packageRules`, `regexManagers`, ignored deps, etc. that genuinely don't
-  belong in the shared file.
-- If the repo needs a rule that looks broadly useful (e.g. another Go/mise
-  grouping convention), prefer proposing it as a change to
-  `renovate/shared.json5` in this repo instead of duplicating it locally.
+## Migrating an existing hand-written renovate.json5
 
-## Migrating an existing renovate.json5
-
-Repos like `chinmina-bridge` and (historically) `kms-import` have their own
-hand-written `renovate.json5` predating the shared config. When onboarding
-one of these:
-
-1. Add the `extends` entry for `github>chinmina/.github//renovate/shared.json5`.
-2. Walk every existing top-level key and `packageRules` entry and check it
-   against `renovate/shared.json5` for a **clash**. A clash is any local rule
-   that:
-   - Sets the same top-level option the shared config already sets (e.g.
-     `semanticCommits`, `semanticCommitType`, `semanticCommitScope`,
-     `minimumReleaseAge`) — Renovate merges `extends` config first, then
-     applies the repo's own top-level keys on top, so a locally redeclared
-     key silently overrides the shared one even if the values are identical.
-     Remove the local key once it matches the shared value.
-   - Duplicates a `packageRules` entry the shared config already provides for
-     the same `matchManagers`/`matchDepNames` (e.g. a local
-     `groupName: "github-actions"` rule for `matchManagers: ["github-actions"]`
-     when the shared config already groups GitHub Actions the same way, or a
-     local Go/mise grouping rule that overlaps the shared "Go dependencies" /
-     "Mise packages" / "Go runtime" groups).
-   - Produces conflicting behavior for the same deps (e.g. shared config
-     groups `go` into "Go runtime" across `gomod`/`mise`, while a local rule
-     also groups `go` under its own `groupName: "go"` — only one group can
-     win, and Renovate will otherwise nondeterministically apply whichever
-     rule matches last).
-   - Sets `postUpdateOptions` that partially overlap the shared list (shared
-     sets `gomodTidy`; if local config only adds `gomodUpdateImportPaths`,
-     merge it into a single `postUpdateOptions` array rather than keeping two
-     separate declarations that could clobber each other depending on merge
-     order).
-3. For each clash found, prefer **deleting the local rule** and relying on
-   the shared one. Only keep the local rule if it is genuinely different in
-   scope from the shared rule (e.g. `regexManagers` for Go version pins in
-   workflow files, or repo-specific `allowedVersions`/`enabled: false`
-   overrides for a single dependency) — these are repo-specific and should
-   stay.
-4. Re-read the merged result end to end and confirm:
+1. Read `renovate/shared.json5` to get its current top-level keys and
+   `packageRules` (manager/dep scope + behavior of each rule).
+2. Read the target repo's existing `renovate.json5` in full.
+3. Add the `extends` entry for `github>chinmina/.github//renovate/shared.json5`
+   if not already present.
+4. For every top-level key and every `packageRules` entry in the target
+   repo's local config, check it against the shared config for a clash:
+   - **Same top-level key set in both** (e.g. commit message settings,
+     release-age gating). `extends` is merged first and local top-level keys
+     apply on top, so a locally redeclared key silently overrides the shared
+     one even when the values match. Remove the local key if it matches the
+     shared value.
+   - **A local `packageRules` entry targets the same
+     managers/deps as a shared entry** (matching or overlapping
+     `matchManagers`, `matchDepNames`, `matchDepPatterns`, etc.) and sets a
+     similar `groupName` or behavior. Only one rule can win for a given dep;
+     keep whichever is correct and delete the redundant one, preferring the
+     shared rule.
+   - **A local `packageRules` entry targets the same deps as a shared entry
+     but with different/incompatible behavior** (e.g. different grouping,
+     conflicting `enabled`/`rangeStrategy`/`allowedVersions`). Flag this
+     explicitly — it needs a decision, not a silent merge — and resolve by
+     keeping one behavior (usually the shared one, unless there's a
+     documented repo-specific reason not to).
+   - **Post-update options or similar list-valued settings are partially
+     duplicated** between local and shared config. Merge into a single list
+     rather than leaving two separate declarations that depend on merge
+     order.
+5. Delete every local rule identified as a clash, in favor of the shared
+   equivalent. Keep only local rules whose scope or behavior is genuinely
+   distinct from anything in the shared config (e.g. repo-specific regex
+   managers, single-dependency version pins/exceptions).
+6. Re-read the resulting file end to end and confirm:
    - No two `packageRules` entries claim the same dep set with different
-     `groupName`s.
-   - No top-level key locally overrides a shared top-level key unless the
-     override is intentional and documented with a comment explaining why.
-   - Repo-specific rules that remain are commented to explain why they exist
-     (this is already the convention in `chinmina-bridge`'s file — keep it).
-
-## Reference: what the shared config currently covers
-
-See [`renovate/shared.json5`](../../renovate/shared.json5) for the current
-source of truth. As of writing it covers:
-
-- `config:recommended`, disabled dependency dashboard, pinned GitHub Action
-  digests, and semantic commit settings (`fix(deps): ...`).
-- `minimumReleaseAge: "5 days"`.
-- `packageRules` grouping: Go module updates ("Go dependencies"), GitHub
-  Actions ("GitHub Actions"), mise packages ("Mise packages"), and the Go
-  runtime across `gomod`/`mise` ("Go runtime", `rangeStrategy: "bump"`).
-- `gomodTidy` post-update option and enabling indirect Go module updates.
-- An exception keeping `chinmina/**` GitHub Actions unpinned (they
-  intentionally track a moving `verified-actions` ref).
-
-Any local rule matching one of the above by manager/dep scope is a
-candidate for removal.
+     `groupName`s or conflicting behavior.
+   - No top-level key locally overrides a shared top-level key unless that
+     override is intentional and commented with the reason.
+   - Every remaining local rule has a comment explaining why it's
+     repo-specific and not covered by the shared config.
