@@ -1,64 +1,92 @@
 {
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: [
     "config:recommended",
-    ":disableDependencyDashboard",
     "helpers:pinGitHubActionDigests",
     ":semanticCommits",
+    // Deliberately overrides config:recommended's :semanticPrefixFixDepsChoreOthers
+    // nuance: gomod indirect/golang/toolchain deps are compiled into the shipped
+    // binary and must keep cutting `fix` releases. The cost -- CI-only updates
+    // (github-actions, mise) also emit `fix` -- is accepted because only repos
+    // using release-please attach any release behavior to commit type at all.
     ":semanticCommitTypeAll(fix)",
-    ":semanticCommitScope(deps)"
+    ":semanticCommitScope(deps)",
   ],
-  "minimumReleaseAge": "5 days",
-  "packageRules": [
+  // Dependency dashboard is intentionally left enabled: it's the only surface
+  // that reports updates Renovate has found but is holding behind
+  // minimumReleaseAge. Without it, "nothing to update" and "updates waiting
+  // until the release-age gate clears" are indistinguishable.
+  minimumReleaseAge: "5 days",
+  packageRules: [
     {
-      "description": "Keep Go module manifests canonical after module updates.",
-      "matchManagers": ["gomod"],
-      "postUpdateOptions": ["gomodTidy"]
+      description: "Keep Go module manifests canonical after module updates. mergeable: true -- a consuming repo's own top-level postUpdateOptions concatenates with this rather than overriding it.",
+      matchManagers: ["gomod"],
+      postUpdateOptions: ["gomodTidy"],
     },
     {
-      "description": "Update indirect Go modules as well as direct modules.",
-      "matchManagers": ["gomod"],
-      "matchDepTypes": ["indirect"],
-      "enabled": true
+      description: "Update indirect Go modules as well as direct modules.",
+      matchManagers: ["gomod"],
+      matchDepTypes: ["indirect"],
+      enabled: true,
     },
     {
-      "description": "Group non-runtime Go module updates, without mixing major and non-major releases.",
-      "matchManagers": ["gomod"],
-      "excludeDepNames": ["go"],
-      "groupName": "Go dependencies",
-      "separateMajorMinor": true,
-      "separateMultipleMajor": true
+      // Broad-group principle: group by area first for non-major updates, add
+      // narrower groups only for higher-risk areas (e.g. security-sensitive
+      // deps). This deliberately overrides config:recommended's group:monorepos
+      // entries (aws-sdk-go-v2, opentelemetry-go, opentelemetry-go-contrib),
+      // folding them into one PR. That trade-off (less monorepo-aware grouping,
+      // less maintenance) is intentional -- do not add per-ecosystem convenience
+      // groups here. vulnerabilityAlerts default to groupName: null and
+      // minimumReleaseAge: null, so CVE-driven updates bypass this group and the
+      // release-age gate regardless.
+      description: "Group non-runtime Go module updates, without mixing major and non-major releases.",
+      matchManagers: ["gomod"],
+      matchDepNames: ["!go"],
+      groupName: "Go dependencies",
+      separateMultipleMajor: true,
     },
     {
-      "description": "Group GitHub Actions updates, without mixing major and non-major releases.",
-      "matchManagers": ["github-actions"],
-      "groupName": "GitHub Actions",
-      "separateMajorMinor": true,
-      "separateMultipleMajor": true
+      description: "Group GitHub Actions updates, without mixing major and non-major releases.",
+      matchManagers: ["github-actions"],
+      groupName: "GitHub Actions",
+      separateMultipleMajor: true,
     },
     {
-      "description": "Group non-runtime mise updates, without mixing major and non-major releases.",
-      "matchManagers": ["mise"],
-      "excludeDepNames": ["go"],
-      "groupName": "Mise packages",
-      "separateMajorMinor": true,
-      "separateMultipleMajor": true
+      description: "Group non-runtime mise updates, without mixing major and non-major releases.",
+      matchManagers: ["mise"],
+      matchDepNames: ["!go"],
+      groupName: "Mise packages",
+      separateMultipleMajor: true,
     },
     {
-      "description": "Keep the Go runtime in go.mod and mise.toml aligned, separately from module updates.",
-      "matchManagers": ["gomod", "mise"],
-      "matchDepNames": ["go"],
-      "groupName": "Go runtime",
-      "rangeStrategy": "bump",
-      "separateMajorMinor": true,
-      "separateMultipleMajor": true
+      description: "Keep the Go runtime in go.mod and mise.toml aligned, separately from module updates.",
+      matchManagers: ["gomod", "mise"],
+      matchDepNames: ["go"],
+      groupName: "Go runtime",
+      rangeStrategy: "bump",
+      separateMultipleMajor: true,
     },
     {
-      "description": "Keep shared chinmina workflows on their intentionally moving verified-actions ref.",
-      "matchManagers": ["github-actions"],
-      "matchDepTypes": ["action"],
-      "matchPackageNames": ["chinmina/**"],
-      "pinDigests": false
-    }
-  ]
+      // pinGitHubActionDigests assigns depType "action" to normal action refs
+      // and "workflow" to reusable workflow refs (lib/modules/manager/github-actions/extract.ts).
+      // Both depTypes must be listed here or reusable-workflow consumers of
+      // chinmina/.github get the intentionally-moving verified-actions ref
+      // digest-pinned.
+      description: "Keep shared chinmina workflows on their intentionally moving verified-actions ref.",
+      matchManagers: ["github-actions"],
+      matchDepTypes: ["action", "workflow"],
+      matchPackageNames: ["chinmina/**"],
+      pinDigests: false,
+    },
+    {
+      // Not docker:pinDigests -- that's config:best-practices only, and these
+      // images are local-dev/integration-stack only (never run in CI or
+      // shipped), so digest churn (e.g. Chainguard's constantly-rebuilt
+      // :latest) would be pure noise with no security benefit.
+      description: "Group container image updates, without mixing major and non-major releases.",
+      matchManagers: ["dockerfile", "docker-compose"],
+      groupName: "Docker images",
+      separateMultipleMajor: true,
+    },
+  ],
 }

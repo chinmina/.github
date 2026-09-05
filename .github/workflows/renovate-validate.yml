@@ -1,0 +1,32 @@
+name: Validate shared Renovate config
+
+on:
+  pull_request:
+    paths:
+      - "renovate/shared.json5"
+      - ".github/workflows/renovate-validate.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copy shared config into an isolated repo-config context
+        # renovate-config-validator autodetects config by filename/location.
+        # It does not resolve remote `extends` presets -- this only checks the
+        # file's own syntax/schema, not whether repos referencing it via
+        # github>chinmina/.github//renovate/shared.json5 can resolve it.
+        #
+        # Do not pass the file path as an argument to the validator: that
+        # validates it as *global* config against the wrong schema and can
+        # report success even for an invalid repo config. Copying it to a
+        # dedicated directory as renovate.json5 and running with no path
+        # argument forces repo-config validation.
+        run: |
+          mkdir -p /tmp/renovate-validate
+          cp renovate/shared.json5 /tmp/renovate-validate/renovate.json5
+
+      - name: Validate as repo config
+        working-directory: /tmp/renovate-validate
+        run: npx --yes --package renovate -- renovate-config-validator --strict
