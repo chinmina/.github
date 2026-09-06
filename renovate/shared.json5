@@ -21,7 +21,10 @@
     {
       description: "Keep Go module manifests canonical after module updates. mergeable: true -- a consuming repo's own top-level postUpdateOptions concatenates with this rather than overriding it.",
       matchManagers: ["gomod"],
-      postUpdateOptions: ["gomodTidy"],
+      // gomodTidy keeps go.mod/go.sum canonical; gomodUpdateImportPaths rewrites
+      // in-repo import paths when a dependency's major version bumps its module
+      // path (/v2, /v3...). Without it, major updates land uncompilable.
+      postUpdateOptions: ["gomodTidy", "gomodUpdateImportPaths"],
     },
     {
       description: "Update indirect Go modules as well as direct modules.",

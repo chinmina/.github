@@ -33,7 +33,8 @@ Do not assume a locally-listed value must be re-added because a shared one
 "wins", and do not delete a local value on the assumption the shared value
 supersedes it. Only remove a local value when it is a literal duplicate.
 
-**Failure mode.** Deleting a repo's `gomodUpdateImportPaths` because the shared
-config already sets `gomodTidy` in `postUpdateOptions` silently breaks major
-module bumps. The two options do different things and were both meant to apply;
-because the option is mergeable, they concatenate rather than compete.
+**Failure mode.** Two values in the same mergeable array often address
+different things. Deleting a local one because "the shared config already sets
+that option" removes whatever the local value did — the array concatenates, so
+the shared value never supersedes the local one. Only ever remove a literal
+duplicate.

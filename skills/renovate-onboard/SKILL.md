@@ -109,7 +109,7 @@ Always close with this table, even when nothing needs a decision:
 | Rule / key | Classification | Action taken | Decision needed |
 | --- | --- | --- | --- |
 | `packageRules[2]` grouping `aws-sdk-*` | fragmenting | deleted — shared broad group already covers it | — |
-| `postUpdateOptions: gomodUpdateImportPaths` | repo-specific | kept + commented | — |
+| `ignoreDeps: ["legacy-internal-sdk"]` | repo-specific | kept + commented | — |
 | custom manager for `.tool-versions` pins | gap-workaround | kept + commented | add an equivalent shared custom manager? |
 
 Then list separately, as explicit asks:
