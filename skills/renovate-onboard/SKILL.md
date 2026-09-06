@@ -7,8 +7,9 @@ description: >
   review/migrate an existing renovate.json5 for rules that clash with,
   duplicate, or have been superseded by the shared config.
 compatibility: >
-  Requires network access and npx (Node 20+) to run renovate-config-validator,
-  and read access to chinmina/.github.
+  Requires network access; npx (Node 20+) to run renovate-config-validator;
+  and, when working outside a chinmina/.github checkout, an authenticated gh
+  CLI with read access to chinmina/.github.
 ---
 
 # Renovate onboarding
@@ -41,12 +42,10 @@ permanent are judgement calls — report them, don't guess.
 
 ## Fixed policies
 
-Apply these; don't relitigate them. One-line rationale each, expanded in
-`references/rationale.md`:
+Apply these; don't relitigate them.
 
 - **Float the preset on the default branch.** Never pin it to a ref and never
-  propose pinning it: a bad shared change only causes unwanted or missing PRs,
-  and floating means one fix reaches every repo.
+  propose pinning it — a shared-config fix then reaches every repo in one edit.
 - **Never put `automerge` in the shared config.** It is opt-in per repo.
 - **Promote, don't duplicate.** A local rule other repos would also want is a
   proposal to change `renovate/shared.json5` — raise it with the caller.
@@ -67,10 +66,9 @@ Apply these; don't relitigate them. One-line rationale each, expanded in
    `packageRules` entry's manager/dep scope and behaviour.
 2. Read the target repo's `renovate.json5` in full.
 3. Add the `extends` entry if absent.
-4. Classify **every** top-level key and `packageRules` entry exactly once,
-   using the table in `references/migration.md`. Each rule gets one
-   classification and one disposition: delete, keep (with a comment stating
-   why), or escalate.
+4. Classify **every** `packageRules` entry exactly once, using the table in
+   `references/migration.md`. Each rule gets one classification and one
+   disposition: delete, keep (with a comment stating why), or escalate.
 5. Apply the dispositions. Re-order the surviving local rules broad → narrow.
 6. Validate and finish (below).
 
