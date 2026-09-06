@@ -1,16 +1,31 @@
 name: Validate shared Renovate config
 
+# No workflow-level GITHUB_TOKEN scope; the single job grants exactly what it needs.
+permissions: {}
+
 on:
   pull_request:
     paths:
       - "renovate/shared.json5"
       - ".github/workflows/renovate-validate.yml"
 
+# Only the latest push to a PR needs validating; cancel superseded runs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
+    name: Validate as repo config
     runs-on: ubuntu-latest
+    permissions:
+      contents: read # check out the shared config to validate it
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # This job runs `npx renovate`, i.e. third-party code downloaded at
+          # run time. Don't leave a usable git credential on disk for it.
+          persist-credentials: false
 
       - name: Copy shared config into an isolated repo-config context
         # renovate-config-validator autodetects config by filename/location.
