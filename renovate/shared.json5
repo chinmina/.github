@@ -72,10 +72,16 @@
       // Both depTypes must be listed here or reusable-workflow consumers of
       // chinmina/.github get the intentionally-moving verified-actions ref
       // digest-pinned.
+      //
+      // Scoped to chinmina/.github specifically, not chinmina/**: this repo is
+      // the only one that publishes a deliberately-moving ref. Any other
+      // chinmina action stays digest-pinned like every other third party.
+      // Renovate strips the subpath, so this name covers both
+      // chinmina/.github/.github/actions/* and .../workflows/* references.
       description: "Keep shared chinmina workflows on their intentionally moving verified-actions ref.",
       matchManagers: ["github-actions"],
       matchDepTypes: ["action", "workflow"],
-      matchPackageNames: ["chinmina/**"],
+      matchPackageNames: ["chinmina/.github"],
       pinDigests: false,
     },
     {
