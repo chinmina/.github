@@ -1,0 +1,13 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: [
+    // Floats on the default branch by design: a shared-config fix reaches every
+    // consuming repo without a migration. Do not pin.
+    //
+    // Resolved from the default branch even here, so edits to shared.json5 take
+    // effect for this repo only once merged.
+    "github>chinmina/.github//renovate/shared.json5",
+  ],
+  // Local rules only, ordered broad -> narrow: last match wins per-option.
+  packageRules: [],
+}
