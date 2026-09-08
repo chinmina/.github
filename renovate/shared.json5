@@ -79,7 +79,7 @@
       matchManagers: ["gomod", "mise"],
       matchDepNames: ["go"],
       groupName: "Go runtime",
-      rangeStrategy: "bump",
+      rangeStrategy: "replace",
       separateMultipleMajor: true,
     },
     {
@@ -90,7 +90,7 @@
       matchManagers: ["mise", "nvm", "nodenv", "npm", "bun"],
       matchDepNames: ["node"],
       groupName: "Node runtime",
-      rangeStrategy: "bump",
+      rangeStrategy: "replace",
       separateMultipleMajor: true,
     },
     {
@@ -102,7 +102,7 @@
       matchManagers: ["mise", "bun-version", "npm", "bun"],
       matchDepNames: ["bun"],
       groupName: "Bun runtime",
-      rangeStrategy: "bump",
+      rangeStrategy: "replace",
       separateMultipleMajor: true,
     },
     {
