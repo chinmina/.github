@@ -1,4 +1,4 @@
-name: Validate shared Renovate config
+name: Validate Renovate config
 
 # No workflow-level GITHUB_TOKEN scope; the single job grants exactly what it needs.
 permissions: {}
@@ -6,7 +6,10 @@ permissions: {}
 on:
   pull_request:
     paths:
+      - "renovate.json5"
       - "renovate/shared.json5"
+      - "skills/renovate-onboard/assets/renovate.json5"
+      - "skills/renovate-onboard/scripts/validate.sh"
       - ".github/workflows/renovate-validate.yml"
 
 # Only the latest push to a PR needs validating; cancel superseded runs.
@@ -16,10 +19,18 @@ concurrency:
 
 jobs:
   validate:
-    name: Validate as repo config
+    name: Validate ${{ matrix.config }}
     runs-on: ubuntu-latest
     permissions:
-      contents: read # check out the shared config to validate it
+      contents: read # check out the configs to validate them
+    strategy:
+      # Report every broken config, not just the first.
+      fail-fast: false
+      matrix:
+        config:
+          - renovate.json5
+          - renovate/shared.json5
+          - skills/renovate-onboard/assets/renovate.json5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -27,21 +38,10 @@ jobs:
           # run time. Don't leave a usable git credential on disk for it.
           persist-credentials: false
 
-      - name: Copy shared config into an isolated repo-config context
-        # renovate-config-validator autodetects config by filename/location.
-        # It does not resolve remote `extends` presets -- this only checks the
-        # file's own syntax/schema, not whether repos referencing it via
-        # github>chinmina/.github//renovate/shared.json5 can resolve it.
-        #
-        # Do not pass the file path as an argument to the validator: that
-        # validates it as *global* config against the wrong schema and can
-        # report success even for an invalid repo config. Copying it to a
-        # dedicated directory as renovate.json5 and running with no path
-        # argument forces repo-config validation.
-        run: |
-          mkdir -p /tmp/renovate-validate
-          cp renovate/shared.json5 /tmp/renovate-validate/renovate.json5
-
       - name: Validate as repo config
-        working-directory: /tmp/renovate-validate
-        run: npx --yes --package renovate -- renovate-config-validator --strict
+        env:
+          # Via env, not ${{ }} interpolation into the shell.
+          CONFIG: ${{ matrix.config }}
+        # Green does not mean the config is correct: remote `extends` presets are
+        # not resolved, and unknown matchManagers values are accepted.
+        run: skills/renovate-onboard/scripts/validate.sh "$CONFIG"

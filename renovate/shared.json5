@@ -57,8 +57,21 @@
     {
       description: "Group non-runtime mise updates, without mixing major and non-major releases.",
       matchManagers: ["mise"],
-      matchDepNames: ["!go"],
+      // Runtimes are excluded; they have their own groups below.
+      matchDepNames: ["!go", "!node", "!bun"],
       groupName: "Mise packages",
+      separateMultipleMajor: true,
+    },
+    {
+      // The `bun` manager also extracts package.json; both are listed so the
+      // group holds whichever manager claims the file.
+      //
+      // engines/volta/packageManager declare toolchain, not packages. Excluding
+      // them keeps a runtime bump out of a dependency PR.
+      description: "Group Node package updates, without mixing major and non-major releases.",
+      matchManagers: ["npm", "bun"],
+      matchDepTypes: ["!engines", "!volta", "!packageManager"],
+      groupName: "Node dependencies",
       separateMultipleMajor: true,
     },
     {
@@ -66,6 +79,29 @@
       matchManagers: ["gomod", "mise"],
       matchDepNames: ["go"],
       groupName: "Go runtime",
+      rangeStrategy: "bump",
+      separateMultipleMajor: true,
+    },
+    {
+      // nvm and nodenv both extract depName "node"; under npm it arrives as
+      // depType engines or volta. `bun` is listed because it supersedes npm for
+      // package.json wherever a bun lockfile sits alongside it.
+      description: "Keep the Node runtime aligned across mise, .nvmrc, .node-version and package.json, separately from package updates.",
+      matchManagers: ["mise", "nvm", "nodenv", "npm", "bun"],
+      matchDepNames: ["node"],
+      groupName: "Node runtime",
+      rangeStrategy: "bump",
+      separateMultipleMajor: true,
+    },
+    {
+      // Separate from "Node runtime": the two version independently.
+      //
+      // bun-version emits depName "Bun", capitalised. Matching is glob-nocase,
+      // so the lowercase pattern catches it -- do not "correct" the case.
+      description: "Keep the Bun runtime aligned across mise, .bun-version and package.json, separately from package updates.",
+      matchManagers: ["mise", "bun-version", "npm", "bun"],
+      matchDepNames: ["bun"],
+      groupName: "Bun runtime",
       rangeStrategy: "bump",
       separateMultipleMajor: true,
     },
