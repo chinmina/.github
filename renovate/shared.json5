@@ -84,9 +84,10 @@
     },
     {
       // nvm and nodenv both extract depName "node"; under npm it arrives as
-      // depType engines or volta.
+      // depType engines or volta. `bun` is listed because it supersedes npm for
+      // package.json wherever a bun lockfile sits alongside it.
       description: "Keep the Node runtime aligned across mise, .nvmrc, .node-version and package.json, separately from package updates.",
-      matchManagers: ["mise", "nvm", "nodenv", "npm"],
+      matchManagers: ["mise", "nvm", "nodenv", "npm", "bun"],
       matchDepNames: ["node"],
       groupName: "Node runtime",
       rangeStrategy: "bump",
@@ -98,7 +99,7 @@
       // bun-version emits depName "Bun", capitalised. Matching is glob-nocase,
       // so the lowercase pattern catches it -- do not "correct" the case.
       description: "Keep the Bun runtime aligned across mise, .bun-version and package.json, separately from package updates.",
-      matchManagers: ["mise", "bun-version", "npm"],
+      matchManagers: ["mise", "bun-version", "npm", "bun"],
       matchDepNames: ["bun"],
       groupName: "Bun runtime",
       rangeStrategy: "bump",
