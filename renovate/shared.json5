@@ -17,6 +17,8 @@
   // minimumReleaseAge. Without it, "nothing to update" and "updates waiting
   // until the release-age gate clears" are indistinguishable.
   minimumReleaseAge: "5 days",
+  // Inert outside pnpm repos, so it needs no manager scoping.
+  postUpdateOptions: ["pnpmDedupe"],
   packageRules: [
     {
       description: "Keep Go module manifests canonical after module updates. mergeable: true -- a consuming repo's own top-level postUpdateOptions concatenates with this rather than overriding it.",
@@ -79,7 +81,7 @@
       matchManagers: ["gomod", "mise"],
       matchDepNames: ["go"],
       groupName: "Go runtime",
-      rangeStrategy: "bump",
+      rangeStrategy: "replace",
       separateMultipleMajor: true,
     },
     {
@@ -90,7 +92,7 @@
       matchManagers: ["mise", "nvm", "nodenv", "npm", "bun"],
       matchDepNames: ["node"],
       groupName: "Node runtime",
-      rangeStrategy: "bump",
+      rangeStrategy: "replace",
       separateMultipleMajor: true,
     },
     {
@@ -102,7 +104,7 @@
       matchManagers: ["mise", "bun-version", "npm", "bun"],
       matchDepNames: ["bun"],
       groupName: "Bun runtime",
-      rangeStrategy: "bump",
+      rangeStrategy: "replace",
       separateMultipleMajor: true,
     },
     {
