@@ -35,6 +35,18 @@
       enabled: true,
     },
     {
+      // Go major versions use distinct module paths. Changing an indirect
+      // requirement cannot migrate imports inside an upstream dependency:
+      // tidy either restores the old module or removes the unused new one.
+      // Keep indirect minor/patch updates enabled; adopt new majors through
+      // updates to the direct dependencies that consume them.
+      description: "Leave indirect Go major migrations to the dependencies that import them.",
+      matchManagers: ["gomod"],
+      matchDepTypes: ["indirect"],
+      matchUpdateTypes: ["major"],
+      enabled: false,
+    },
+    {
       // Broad-group principle: group by area first for non-major updates, add
       // narrower groups only for higher-risk areas (e.g. security-sensitive
       // deps). This deliberately overrides config:recommended's group:monorepos
