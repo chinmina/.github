@@ -97,6 +97,20 @@
       separateMultipleMajor: true,
     },
     {
+      // go-mod-directive treats `1.26` as `^1.26`: "replace" never moves it and
+      // "bump" writes a full patch version. Collapsing releases to major.minor
+      // and comparing them as plain versions makes go.mod go from 1.26 to 1.27
+      // and ignore patch releases. mise.toml still takes the full version.
+      // depType "golang" is the `go` line only. The `toolchain` line also has
+      // depName "go" and must keep its patch version.
+      description: "Keep the go.mod go directive at major.minor.",
+      matchManagers: ["gomod"],
+      matchDepTypes: ["golang"],
+      matchDepNames: ["go"],
+      extractVersion: "^(?<version>\\d+\\.\\d+)(?:\\.\\d+)?$",
+      versioning: "regex:^(?<major>\\d+)\\.(?<minor>\\d+)$",
+    },
+    {
       // nvm and nodenv both extract depName "node"; under npm it arrives as
       // depType engines or volta. `bun` is listed because it supersedes npm for
       // package.json wherever a bun lockfile sits alongside it.
