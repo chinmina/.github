@@ -1,17 +1,26 @@
 # Reusable release-please trigger workflow (PRD reqs R1-R7, R31-R34).
 #
 # Opens/updates a Release PR on pushes to the default branch and, when that PR
-# is merged, creates a DRAFT GitHub Release (no tag) and then pushes the v* tag
-# using a minted GitHub App *installation* token. Because the tag is pushed with
-# an installation token (never GITHUB_TOKEN), the tag push emits a
+# is merged, creates a DRAFT GitHub Release together with its v* tag, using a
+# minted GitHub App *installation* token. Because the tag is created with an
+# installation token (never GITHUB_TOKEN), the tag push emits a
 # workflow-triggering event that drives the downstream release wrapper (R4).
 #
-# The release MUST be a draft: the wrapper publishes only after attestation, so
-# nothing is downloadable before its provenance exists. release-please-action v4
-# has no `draft` input, so this is set by the consumer's release-please config
-# ("draft": true). The workflow VALIDATES that config before release-please runs
-# and fails loudly if the consumer omitted it — catching the misconfiguration
-# before any non-draft release can be created, rather than after.
+# Two release-please settings are REQUIRED in the consumer's config, because
+# release-please-action has no input for either:
+#
+#   "draft": true — the wrapper publishes only after attestation, so nothing is
+#     downloadable before its provenance exists.
+#   "force-tag-creation": true — GitHub creates no tag for a draft release until
+#     it is published. release-please builds the next Release PR in the same
+#     run that creates the release, and finds the previous release by its tag;
+#     without the tag it walks the entire history and opens a Release PR with
+#     the wrong version and every commit since the start of the repo.
+#
+# The workflow VALIDATES both before release-please runs and fails loudly if
+# either is missing — release-please config cannot be inherited across repos
+# (it is read from the consumer's branch), so this check is how the kit
+# controls it.
 #
 # Token source is selected per consuming repo:
 #   - app      (default): chinmina GitHub App via create-github-app-token.
@@ -131,9 +140,10 @@ jobs:
           scope: ${{ inputs.sts-scope != '' && inputs.sts-scope || github.repository_owner }}
           identity: ${{ inputs.sts-identity != '' && inputs.sts-identity || format('release-please-{0}', github.event.repository.name) }}
 
-      # Enforce the draft requirement (see header) before release-please runs.
-      # draft may be set globally or on every package.
-      - name: Require draft releases in the release-please config
+      # Enforce the draft and forced-tag requirements (see header) before
+      # release-please runs. Each may be set at the top level or per package; a
+      # package-level value overrides the top-level one, as in release-please.
+      - name: Require draft releases and forced tag creation in the release-please config
         env:
           GH_TOKEN: ${{ inputs.token-source == 'app' && steps.app-token.outputs.token || steps.octo-sts.outputs.token }}
           REPO: ${{ github.repository }}
@@ -141,12 +151,28 @@ jobs:
           REF: ${{ github.sha }}
         run: |
           config="$(gh api "repos/${REPO}/contents/${CONFIG_FILE}?ref=${REF}" -H "Accept: application/vnd.github.raw")"
-          if ! jq -e '.draft == true or ((.packages // {}) != {} and (.packages | to_entries | all(.value.draft == true)))' <<<"${config}" >/dev/null; then
+          # true when key k resolves to true for every package (or at the top
+          # level when no packages are declared). Single-quoted on purpose: the
+          # $c is a jq variable, not a shell one.
+          # shellcheck disable=SC2016
+          enabled='def enabled(k): . as $c
+            | [($c.packages // {})[] | if has(k) then .[k] else $c[k] end]
+            | if length == 0 then $c[k] == true else all(. == true) end;'
+          failed=0
+          if ! jq -e "${enabled} enabled(\"draft\")" <<<"${config}" >/dev/null; then
             echo "::error::${CONFIG_FILE} does not enable draft releases. Set \"draft\": true (top level, or on every package) so release-please creates a DRAFT release."
             echo "The release wrapper builds and attests artifacts, then flips the release out of draft LAST; without draft, the release is published and publicly downloadable before any attestation exists."
+            failed=1
+          fi
+          if ! jq -e "${enabled} enabled(\"force-tag-creation\")" <<<"${config}" >/dev/null; then
+            echo "::error::${CONFIG_FILE} does not force tag creation. Set \"force-tag-creation\": true (top level, or on every package) so release-please creates the v* tag with the draft release."
+            echo "A draft release has no tag until it is published. Without the tag, release-please cannot find the release it just created and opens a Release PR containing the entire commit history."
+            failed=1
+          fi
+          if (( failed )); then
             exit 1
           fi
-          echo "Confirmed ${CONFIG_FILE} enables draft releases."
+          echo "Confirmed ${CONFIG_FILE} enables draft releases and forced tag creation."
 
       # R6: if neither mint step produced a token, fail before release-please.
       - name: Release Please
@@ -159,36 +185,15 @@ jobs:
           config-file: ${{ inputs.config-file }}
           manifest-file: ${{ inputs.manifest-file }}
 
-      # Close a reopened Release PR when its draft release already exists.
-      # release-please only counts PUBLISHED releases as "released" — a draft
-      # does not — so after a Release PR merges and creates a draft, the next
-      # push to the default branch reopens the same-version PR. Detect that and
-      # close it before it causes confusion; the draft publishes downstream once
-      # the tag-triggered release wrapper completes. The `pr` output is a JSON
-      # PullRequest object; it's passed through as a raw string and parsed with
-      # jq in-script (NOT fromJSON in `env:`, which GitHub evaluates even when
-      # this step is skipped — fromJSON('') then fails the whole job).
-      - name: Close Release PR if a draft release already exists
-        if: ${{ steps.release.outputs.release_created != 'true' && steps.release.outputs.pr != '' }}
-        env:
-          GH_TOKEN: ${{ inputs.token-source == 'app' && steps.app-token.outputs.token || steps.octo-sts.outputs.token }}
-          PR_JSON: ${{ steps.release.outputs.pr }}
-        run: |
-          PR_NUMBER=$(jq -r '.number' <<<"$PR_JSON")
-          PR_TITLE=$(jq -r '.title' <<<"$PR_JSON")
-          VERSION=$(echo "$PR_TITLE" | grep -oP '\d+\.\d+\.\d+' || true)
-          if [ -n "$VERSION" ]; then
-            DRAFT=$(gh release view "v${VERSION}" --json isDraft -q '.isDraft' 2>/dev/null || echo "false")
-            if [ "$DRAFT" = "true" ]; then
-              gh pr close "$PR_NUMBER" \
-                --comment "Closing: draft release v${VERSION} already exists and is pending attestation and publication. It will be published automatically once the release workflow completes."
-            fi
-          fi
-
-      # R3/R4/L2: release-please created a DRAFT release with no git tag. Push the
-      # tag explicitly with the installation token so the push triggers the
-      # downstream wrapper. R7: skipped automatically when no release was created.
-      - name: Create release tag
+      # R3/R4: release-please creates the v* tag with the draft release
+      # (force-tag-creation, validated above). This step is a backstop that makes
+      # sure the tag exists at the release commit: release-please treats ANY 422
+      # from tag creation as "tag already exists", so a rejected tag (e.g. a tag
+      # ruleset without a bypass for the minted App) would otherwise pass
+      # silently. Creating the ref with the installation token, never
+      # GITHUB_TOKEN, is what lets the tag push trigger the downstream wrapper.
+      # R7: skipped automatically when no release was created.
+      - name: Ensure release tag exists
         if: ${{ steps.release.outputs.release_created }}
         env:
           GH_TOKEN: ${{ inputs.token-source == 'app' && steps.app-token.outputs.token || steps.octo-sts.outputs.token }}
@@ -196,7 +201,17 @@ jobs:
           TARGET_SHA: ${{ steps.release.outputs.sha }}
           REPO: ${{ github.repository }}
         run: |
-          echo "Creating tag ${TAG} at ${TARGET_SHA} via the installation token"
+          # On an HTTP error gh prints the error body to stdout and ignores
+          # --jq, so branch on the exit status rather than the output.
+          if existing_sha="$(gh api "repos/${REPO}/git/ref/tags/${TAG}" --jq '.object.sha' 2>/dev/null)"; then
+            if [[ "${existing_sha}" == "${TARGET_SHA}" ]]; then
+              echo "Tag ${TAG} already exists at ${TARGET_SHA} (created by release-please)."
+              exit 0
+            fi
+            echo "::error::Tag ${TAG} exists at ${existing_sha}, not the release commit ${TARGET_SHA}."
+            exit 1
+          fi
+          echo "::warning::release-please did not create tag ${TAG}; creating it at ${TARGET_SHA} via the installation token. Check that the minted App can bypass any v* tag ruleset, otherwise the next Release PR will be built without this tag."
           gh api \
             --method POST \
             "repos/${REPO}/git/refs" \

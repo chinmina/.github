@@ -171,8 +171,17 @@ there automatically. Omit it while login is on and the run fails fast.
       place to set it). **It MUST also set `"include-component-in-tag": false`**
       so tags are plain `v<semver>` — the default (`true`) prefixes the component
       (e.g. `boxed-v0.1.0`), which matches neither `release.yml`'s `v*` trigger
-      nor the `v[0-9]*` ruleset, and `release-please.yml` derives its draft
-      lookup as `v<semver>`. Get this wrong and the release never fires.
+      nor the `v[0-9]*` ruleset. Get this wrong and the release never fires.
+
+      **It MUST also set `"force-tag-creation": true`** so release-please
+      creates the `v*` tag at the same moment as the draft release. GitHub
+      creates no tag for a draft until it is published, and release-please
+      finds the previous release by its tag — in the *same run* that creates
+      the release, it builds the next Release PR. Without the tag it can't find
+      the release it just made, walks the entire commit history, and opens a
+      Release PR with the wrong version and every commit since the repo began
+      (any old `Release-As:` footer then sets the version). `release-please.yml`
+      validates this alongside `"draft"` and fails the run if it is missing.
 - [ ] **binstaller spec** at `.config/binstaller.yml` *(only if binstaller on)*.
 
 #### Declaring `binstaller`
@@ -212,7 +221,10 @@ post-install steps needed.
 
 - [ ] **A `tag creation` ruleset with no bypass actor is a hard blocker.** If a
       ruleset restricts creating `v*` tags, the minted installation token can't
-      push the tag and the pipeline stalls at "draft, no tag." Add the
+      push the tag and the pipeline stalls at "draft, no tag." (release-please
+      itself hides this rejection — it reads any 422 from tag creation as "tag
+      already exists" — so the first visible symptom is the kit's
+      `Ensure release tag exists` step warning or failing.) Add the
       token-minting **App** as a bypass actor on that **restricting** ruleset
       (`actor_type: Integration`, `bypass_mode: always`) — the octo-sts App on
       the octo-sts path, or the chinmina release App on the app path.
@@ -822,9 +834,14 @@ keep it intact when binstaller is on.
   `"include-component-in-tag": false`. The default (`true`) prefixes the tag
   with the package component (e.g. `boxed-v0.1.0`), which matches neither
   `release.yml`'s `tags: ["v*"]` trigger nor the `refs/tags/v[0-9]*` ruleset, so
-  the release never fires. `release-please.yml` also derives the draft-lookup
-  tag as `v<semver>` (from the PR title), making the plain `v` tag a hard
-  requirement.
+  the release never fires.
+- **Forced-tag contract**: `release-please-config.json` must set
+  `"force-tag-creation": true` so the `v*` tag exists as soon as the draft
+  does. release-please locates the previous release by its tag when it builds
+  the next Release PR (in the same run), and a draft has no tag of its own
+  until it is published. `release-please.yml` validates this and fails the run
+  if it is missing. Its `Ensure release tag exists` step creates the tag only
+  if release-please didn't (with a warning — see Step 5).
 - **goreleaser draft contract**: `release.draft: true` + `mode: keep-existing` +
   `use_existing_draft: true` (all three — see Step 2d). Without
   `use_existing_draft: true` goreleaser can't see release-please's draft and
@@ -877,7 +894,10 @@ keep it intact when binstaller is on.
 3. **Push a conventional commit** to the default branch → release-please opens a
    Release PR.
 4. **Merge the Release PR** → a **draft** release appears and a `v*` tag is
-   pushed (by the installation token).
+   pushed (by the installation token). In that run's log, `Ensure release tag
+   exists` should report the tag **already exists** (release-please created
+   it); a warning that it had to create the tag means release-please's tag
+   creation was rejected — fix that before the next release (Step 5).
 5. **`release.yml` fires** on the tag → goreleaser fills the draft → `install.sh`
    is generated (if binstaller on) → artifacts + `install.sh` are attested →
    the release is published **last**.
@@ -926,9 +946,12 @@ assumption; run them via the pinned invocations below.
 | octo-sts mint fails | App not installed, central policy not merged, `scope` pointing at the repo instead of the owner, or `subject` not environment-qualified | install the App + merge the central policy (1d); keep `scope` = owner; set `subject: …:environment:<env>` (2c) |
 | `release.yml` never fires; the draft's tag is component-prefixed (e.g. `boxed-v0.1.0`) | `release-please-config.json` missing `"include-component-in-tag": false` | set `"include-component-in-tag": false` so the tag is plain `v<semver>` (1e) |
 | The minted token can't push the `v*` tag; pipeline stalls at "draft, no tag" | a `tag creation` ruleset restricts the ref with no bypass for the App | add the App as an `Integration`/`bypass_mode: always` bypass actor on the *restricting* ruleset (1f) |
+| `Ensure release tag exists` warns "release-please did not create tag …" | release-please's tag creation was rejected — usually the tag ruleset above. release-please treats **any** 422 from tag creation as "already exists" and carries on silently | add the App bypass (1f); the step creates the tag as a fallback, but the Release PR from that run was built without it — see the next row |
+| After a release, a new Release PR proposes an old/odd version and lists the entire commit history | the tag didn't exist when release-please built the next PR (missing `"force-tag-creation": true`, or the tag creation was rejected) | set `"force-tag-creation": true` (1e) and fix the ruleset bypass (1f); close the bad PR — the next push to the default branch rebuilds it from the tag |
 | Homebrew step fails to auth on the octo-sts path | `release-tap` policy missing the repo, or repo not in the `claim_pattern.repository` alternation | add the repo to the shared `release-tap` policy (2c) |
 | `uses: chinmina/.github/...` blocked | owner policy disallows `chinmina/*` | allow `chinmina/*` in the owner's Actions settings (1c) |
 | `release-please.yml` fails: "… does not enable draft releases" | `release-please-config.json` missing `"draft": true` | add `"draft": true` to `release-please-config.json` (1e) |
+| `release-please.yml` fails: "… does not force tag creation" | `release-please-config.json` missing `"force-tag-creation": true` | add `"force-tag-creation": true` to `release-please-config.json` (1e) |
 | Release publishes before attestation / no gate, or a duplicate release appears | goreleaser missing `use_existing_draft: true` (or not in draft+keep-existing mode) | set `release.draft: true` + `mode: keep-existing` + `use_existing_draft: true` (2d) |
 | Homebrew cask published on a prerelease/RC tag | cask block missing `skip_upload: auto` | add `skip_upload: auto` to the `homebrew_casks:` entry (2d) |
 | `setup-release-toolchain` fails: tool not declared | required tool missing from `mise.toml` | declare `go`/`goreleaser` (and `binstaller` when on — it needs `[tool_alias]` + `rename_exe`) in `mise.toml` (1e) |
