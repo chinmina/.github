@@ -1,0 +1,35 @@
+name: Validate release-please config
+description: >-
+  Validate a release-please-config.json against release-please's published
+  schema, tightened so a misspelt key at any level fails. release-please itself
+  ignores unknown keys silently, so a typo just turns the setting off; this
+  stops the release run before anything is created. Exits non-zero with one
+  ::error:: line per problem.
+
+inputs:
+  config-path:
+    description: Local path to the release-please-config.json to validate.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # Pin this action's own Node, independent of the runner image.
+    - name: Set up Node for config validation
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      with:
+        node-version: "24"
+
+    # Install the validator (ajv) from the committed lockfile; no install
+    # scripts run.
+    - name: Install action dependencies
+      shell: bash --noprofile --norc -euo pipefail {0}
+      working-directory: ${{ github.action_path }}
+      run: npm ci --ignore-scripts --no-audit --no-fund
+
+    - name: Validate release-please config against the schema
+      shell: bash --noprofile --norc -euo pipefail {0}
+      env:
+        CONFIG_PATH: ${{ inputs.config-path }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: node "${ACTION_PATH}/validate.mjs" "${CONFIG_PATH}"

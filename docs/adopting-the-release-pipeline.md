@@ -182,6 +182,11 @@ there automatically. Omit it while login is on and the run fails fast.
       Release PR with the wrong version and every commit since the repo began
       (any old `Release-As:` footer then sets the version). `release-please.yml`
       validates this alongside `"draft"` and fails the run if it is missing.
+
+      `release-please.yml` also checks the **whole file** against
+      release-please's schema (strict at every level) before release-please
+      runs: release-please silently ignores unknown keys, so a typo like
+      `"force-tag-creaton"` would otherwise just switch the setting off.
 - [ ] **binstaller spec** at `.config/binstaller.yml` *(only if binstaller on)*.
 
 #### Declaring `binstaller`
@@ -951,6 +956,7 @@ assumption; run them via the pinned invocations below.
 | Homebrew step fails to auth on the octo-sts path | `release-tap` policy missing the repo, or repo not in the `claim_pattern.repository` alternation | add the repo to the shared `release-tap` policy (2c) |
 | `uses: chinmina/.github/...` blocked | owner policy disallows `chinmina/*` | allow `chinmina/*` in the owner's Actions settings (1c) |
 | `release-please.yml` fails: "… does not enable draft releases" | `release-please-config.json` missing `"draft": true` | add `"draft": true` to `release-please-config.json` (1e) |
+| `release-please.yml` fails: "release-please config: … unknown key …" or "… must be boolean" | a misspelt key or wrong type in `release-please-config.json` — release-please would silently ignore it, so the kit stops the run instead | fix the key named in the error. If it's a real release-please key the kit doesn't know yet, update the schema in `validate-release-please-config` (see its README) |
 | `release-please.yml` fails: "… does not force tag creation" | `release-please-config.json` missing `"force-tag-creation": true` | add `"force-tag-creation": true` to `release-please-config.json` (1e) |
 | Release publishes before attestation / no gate, or a duplicate release appears | goreleaser missing `use_existing_draft: true` (or not in draft+keep-existing mode) | set `release.draft: true` + `mode: keep-existing` + `use_existing_draft: true` (2d) |
 | Homebrew cask published on a prerelease/RC tag | cask block missing `skip_upload: auto` | add `skip_upload: auto` to the `homebrew_casks:` entry (2d) |

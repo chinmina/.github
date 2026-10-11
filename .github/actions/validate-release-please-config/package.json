@@ -1,0 +1,13 @@
+{
+  "name": "@chinmina/validate-release-please-config-action",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Schema validation for release-please-config.json, run by the shared release-please workflow. Not published.",
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "ajv": "8.20.0"
+  }
+}

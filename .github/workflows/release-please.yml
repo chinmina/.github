@@ -20,7 +20,9 @@
 # The workflow VALIDATES both before release-please runs and fails loudly if
 # either is missing — release-please config cannot be inherited across repos
 # (it is read from the consumer's branch), so this check is how the kit
-# controls it.
+# controls it. It first validates the whole config against release-please's
+# schema (validate-release-please-config), because release-please silently
+# ignores unknown keys and a misspelt setting would otherwise just be off.
 #
 # Token source is selected per consuming repo:
 #   - app      (default): chinmina GitHub App via create-github-app-token.
@@ -140,24 +142,43 @@ jobs:
           scope: ${{ inputs.sts-scope != '' && inputs.sts-scope || github.repository_owner }}
           identity: ${{ inputs.sts-identity != '' && inputs.sts-identity || format('release-please-{0}', github.event.repository.name) }}
 
-      # Enforce the draft and forced-tag requirements (see header) before
-      # release-please runs. Each may be set at the top level or per package; a
-      # package-level value overrides the top-level one, as in release-please.
-      - name: Require draft releases and forced tag creation in the release-please config
+      # Fetch the consumer's config once (at the pushed commit) for the checks
+      # below. release-please itself reads it through the API the same way.
+      - name: Fetch the release-please config
+        id: config
         env:
           GH_TOKEN: ${{ inputs.token-source == 'app' && steps.app-token.outputs.token || steps.octo-sts.outputs.token }}
           REPO: ${{ github.repository }}
           CONFIG_FILE: ${{ inputs.config-file }}
           REF: ${{ github.sha }}
         run: |
-          config="$(gh api "repos/${REPO}/contents/${CONFIG_FILE}?ref=${REF}" -H "Accept: application/vnd.github.raw")"
+          path="${RUNNER_TEMP}/release-please-config.json"
+          gh api "repos/${REPO}/contents/${CONFIG_FILE}?ref=${REF}" -H "Accept: application/vnd.github.raw" >"${path}"
+          echo "path=${path}" >>"${GITHUB_OUTPUT}"
+
+      # Fail on a malformed config or a misspelt key before anything is
+      # created: release-please ignores unknown keys silently, so a typo would
+      # just turn the setting off.
+      - name: Validate the release-please config against its schema
+        uses: chinmina/.github/.github/actions/validate-release-please-config@verified-actions
+        with:
+          config-path: ${{ steps.config.outputs.path }}
+
+      # Enforce the draft and forced-tag requirements (see header) before
+      # release-please runs. Each may be set at the top level or per package; a
+      # package-level value overrides the top-level one, as in release-please.
+      - name: Require draft releases and forced tag creation in the release-please config
+        env:
+          CONFIG_FILE: ${{ inputs.config-file }}
+          CONFIG_PATH: ${{ steps.config.outputs.path }}
+        run: |
           # Succeeds when key $1 is true for every package once the package's
           # settings are laid over the top-level ones (`. + $p`: the package
           # wins, as in release-please). $p and $k are jq variables, hence the
           # single quotes.
           enabled() {
             # shellcheck disable=SC2016
-            jq -e --arg k "$1" '[.packages[] as $p | . + $p | .[$k] == true] | all' <<<"${config}" >/dev/null
+            jq -e --arg k "$1" '[.packages[] as $p | . + $p | .[$k] == true] | all' "${CONFIG_PATH}" >/dev/null
           }
           failed=0
           if ! enabled draft; then
@@ -178,6 +199,8 @@ jobs:
       # R6: if neither mint step produced a token, fail before release-please.
       - name: Release Please
         id: release
+        # Bundles release-please v17.6.0. When this pin moves, update the schema
+        # vendored in validate-release-please-config to the matching version.
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
           # The token is selected inline (never re-emitted to an output) so it
