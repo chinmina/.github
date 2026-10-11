@@ -47,10 +47,7 @@
                 "type": "boolean"
               }
             },
-            "required": [
-              "type",
-              "section"
-            ]
+            "required": ["type", "section"]
           }
         },
         "release-as": {
@@ -100,10 +97,7 @@
         "changelog-type": {
           "description": "The type of changelog to use. Defaults to `default`.",
           "type": "string",
-          "enum": [
-            "default",
-            "github"
-          ]
+          "enum": ["default", "github"]
         },
         "changelog-host": {
           "description": "Generate changelog links to this GitHub host. Useful for running against GitHub Enterprise.",
@@ -156,11 +150,7 @@
                 "properties": {
                   "type": {
                     "description": "The file format type.",
-                    "enum": [
-                      "json",
-                      "toml",
-                      "yaml"
-                    ]
+                    "enum": ["json", "toml", "yaml"]
                   },
                   "path": {
                     "description": "The path to the file.",
@@ -175,11 +165,7 @@
                     "type": "string"
                   }
                 },
-                "required": [
-                  "type",
-                  "path",
-                  "jsonpath"
-                ]
+                "required": ["type", "path", "jsonpath"]
               },
               {
                 "description": "An extra XML file with a targeted update via xpath.",
@@ -187,9 +173,7 @@
                 "properties": {
                   "type": {
                     "description": "The file format type.",
-                    "enum": [
-                      "xml"
-                    ]
+                    "enum": ["xml"]
                   },
                   "path": {
                     "description": "The path to the file.",
@@ -204,11 +188,7 @@
                     "type": "string"
                   }
                 },
-                "required": [
-                  "type",
-                  "path",
-                  "xpath"
-                ]
+                "required": ["type", "path", "xpath"]
               },
               {
                 "description": "An extra pom.xml file.",
@@ -216,9 +196,7 @@
                 "properties": {
                   "type": {
                     "description": "The file format type.",
-                    "enum": [
-                      "pom"
-                    ]
+                    "enum": ["pom"]
                   },
                   "path": {
                     "description": "The path to the file.",
@@ -229,10 +207,7 @@
                     "type": "boolean"
                   }
                 },
-                "required": [
-                  "type",
-                  "path"
-                ]
+                "required": ["type", "path"]
               },
               {
                 "description": "An extra arbitrary file that includes release-please generic updater's annotation.",
@@ -240,9 +215,7 @@
                 "properties": {
                   "type": {
                     "description": "The file format type.",
-                    "enum": [
-                      "generic"
-                    ]
+                    "enum": ["generic"]
                   },
                   "path": {
                     "description": "The path to the file.",
@@ -253,10 +226,7 @@
                     "type": "boolean"
                   }
                 },
-                "required": [
-                  "type",
-                  "path"
-                ]
+                "required": ["type", "path"]
               }
             ]
           }
@@ -306,301 +276,7 @@
           "description": "Per-path component configuration.",
           "type": "object",
           "additionalProperties": {
-            "type": "object",
-            "properties": {
-              "release-type": {
-                "description": "The strategy to use for this component.",
-                "type": "string"
-              },
-              "bump-minor-pre-major": {
-                "description": "Breaking changes only bump semver minor if version < 1.0.0",
-                "type": "boolean"
-              },
-              "bump-patch-for-minor-pre-major": {
-                "description": "Feature changes only bump semver patch if version < 1.0.0",
-                "type": "boolean"
-              },
-              "prerelease-type": {
-                "description": "Configuration option for the prerelease versioning strategy. If prerelease strategy used and type set, will set the prerelease part of the version to the provided value in case prerelease part is not present.",
-                "type": "string"
-              },
-              "versioning": {
-                "description": "Versioning strategy. Defaults to `default`",
-                "type": "string"
-              },
-              "changelog-sections": {
-                "description": "Override the Changelog configuration sections",
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "type": {
-                      "description": "Semantic commit type (e.g. `feat`, `chore`)",
-                      "type": "string"
-                    },
-                    "section": {
-                      "description": "Changelog section title",
-                      "type": "string"
-                    },
-                    "hidden": {
-                      "description": "Skip displaying this type of commit. Defaults to `false`.",
-                      "type": "boolean"
-                    }
-                  },
-                  "required": [
-                    "type",
-                    "section"
-                  ]
-                }
-              },
-              "release-as": {
-                "description": "[DEPRECATED] Override the next version of this package. Consider using a `Release-As` commit instead.",
-                "type": "string"
-              },
-              "skip-github-release": {
-                "description": "Skip tagging GitHub releases for this package. Release-Please still requires releases to be tagged, so this option should only be used if you have existing infrastructure to tag these releases.Defaults to `false`.",
-                "type": "boolean"
-              },
-              "skip-changelog": {
-                "description": "Skip generating a changelog for this package. Defaults to `false`.",
-                "type": "boolean"
-              },
-              "draft": {
-                "description": "Create the GitHub release in draft mode. Defaults to `false`.",
-                "type": "boolean"
-              },
-              "force-tag-creation": {
-                "description": "Force the creation of a Git tag for the release. This is particularly useful when `draft` is enabled, because GitHub does not create a Git tag for draft releases until they are published. This 'lazy tag creation' causes release-please to fail to find the previous release, potentially generating incorrect changelogs. Setting this to `true` ensures the tag is created immediately. Defaults to `false`.",
-                "type": "boolean"
-              },
-              "prerelease": {
-                "description": "Create the GitHub release as prerelease. Defaults to `false`.",
-                "type": "boolean"
-              },
-              "draft-pull-request": {
-                "description": "Open the release pull request in draft mode. Defaults to `false`.",
-                "type": "boolean"
-              },
-              "extra-label": {
-                "description": "Comma-separated list of labels to add to a newly opened pull request",
-                "type": "string"
-              },
-              "include-component-in-tag": {
-                "description": "When tagging a release, include the component name as part of the tag. Defaults to `true`.",
-                "type": "boolean"
-              },
-              "include-v-in-tag": {
-                "description": "When tagging a release, include `v` in the tag. Defaults to `true`.",
-                "type": "boolean"
-              },
-              "include-v-in-release-name": {
-                "description": "Include `v` in the GitHub release name. Defaults to `true`.",
-                "type": "boolean"
-              },
-              "changelog-type": {
-                "description": "The type of changelog to use. Defaults to `default`.",
-                "type": "string",
-                "enum": [
-                  "default",
-                  "github"
-                ]
-              },
-              "changelog-host": {
-                "description": "Generate changelog links to this GitHub host. Useful for running against GitHub Enterprise.",
-                "type": "string"
-              },
-              "changelog-path": {
-                "description": "Path to the file that tracks release note changes. Defaults to `CHANGELOG.md`.",
-                "type": "string"
-              },
-              "pull-request-title-pattern": {
-                "description": "Customize the release pull request title.",
-                "type": "string"
-              },
-              "pull-request-header": {
-                "description": "Customize the release pull request header.",
-                "type": "string"
-              },
-              "pull-request-footer": {
-                "description": "Customize the release pull request footer.",
-                "type": "string"
-              },
-              "separate-pull-requests": {
-                "description": "Open a separate release pull request for each component. Defaults to `false`.",
-                "type": "boolean"
-              },
-              "always-update": {
-                "description": "Always update the pull request with the latest changes. Defaults to `false`.",
-                "type": "boolean"
-              },
-              "tag-separator": {
-                "description": "Customize the separator between the component and version in the GitHub tag.",
-                "type": "string"
-              },
-              "date-format": {
-                "description": "Date format given as a strftime expression for the generic strategy.",
-                "type": "string"
-              },
-              "extra-files": {
-                "description": "Specify extra generic files to replace versions.",
-                "type": "array",
-                "items": {
-                  "anyOf": [
-                    {
-                      "description": "The path to the file. The `Generic` updater uses annotations to replace versions.",
-                      "type": "string"
-                    },
-                    {
-                      "description": "An extra JSON, YAML, or TOML file with a targeted update via jsonpath.",
-                      "type": "object",
-                      "properties": {
-                        "type": {
-                          "description": "The file format type.",
-                          "enum": [
-                            "json",
-                            "toml",
-                            "yaml"
-                          ]
-                        },
-                        "path": {
-                          "description": "The path to the file.",
-                          "type": "string"
-                        },
-                        "glob": {
-                          "description": "Whether to treat the path as a glob. Defaults to `false`.",
-                          "type": "boolean"
-                        },
-                        "jsonpath": {
-                          "description": "The jsonpath to the version entry in the file.",
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "type",
-                        "path",
-                        "jsonpath"
-                      ]
-                    },
-                    {
-                      "description": "An extra XML file with a targeted update via xpath.",
-                      "type": "object",
-                      "properties": {
-                        "type": {
-                          "description": "The file format type.",
-                          "enum": [
-                            "xml"
-                          ]
-                        },
-                        "path": {
-                          "description": "The path to the file.",
-                          "type": "string"
-                        },
-                        "glob": {
-                          "description": "Whether to treat the path as a glob. Defaults to `false`.",
-                          "type": "boolean"
-                        },
-                        "xpath": {
-                          "description": "The xpath to the version entry in the file.",
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "type",
-                        "path",
-                        "xpath"
-                      ]
-                    },
-                    {
-                      "description": "An extra pom.xml file.",
-                      "type": "object",
-                      "properties": {
-                        "type": {
-                          "description": "The file format type.",
-                          "enum": [
-                            "pom"
-                          ]
-                        },
-                        "path": {
-                          "description": "The path to the file.",
-                          "type": "string"
-                        },
-                        "glob": {
-                          "description": "Whether to treat the path as a glob. Defaults to `false`.",
-                          "type": "boolean"
-                        }
-                      },
-                      "required": [
-                        "type",
-                        "path"
-                      ]
-                    },
-                    {
-                      "description": "An extra arbitrary file that includes release-please generic updater's annotation.",
-                      "type": "object",
-                      "properties": {
-                        "type": {
-                          "description": "The file format type.",
-                          "enum": [
-                            "generic"
-                          ]
-                        },
-                        "path": {
-                          "description": "The path to the file.",
-                          "type": "string"
-                        },
-                        "glob": {
-                          "description": "Whether to treat the path as a glob. Defaults to `false`.",
-                          "type": "boolean"
-                        }
-                      },
-                      "required": [
-                        "type",
-                        "path"
-                      ]
-                    }
-                  ]
-                }
-              },
-              "exclude-paths": {
-                "description": "Path of commits to be excluded from parsing. If all files from commit belong to one of the paths it will be skipped",
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "version-file": {
-                "description": "Path to the specialize version file. Used by `ruby` and `simple` strategies.",
-                "type": "string"
-              },
-              "snapshot-label": {
-                "description": "Label to add to snapshot pull request. Used by `java` strategies.",
-                "type": "string"
-              },
-              "skip-snapshot": {
-                "description": "If set, do not propose snapshot pull requests. Used by `java` strategies.",
-                "type": "boolean"
-              },
-              "initial-version": {
-                "description": "Releases the initial library with a specified version",
-                "type": "string"
-              },
-              "component-no-space": {
-                "description": "release-please automatically adds ` ` (space) in front of parsed ${component}. This option indicates whether that behaviour should be disabled. Defaults to `false`",
-                "type": "boolean"
-              },
-              "component": {
-                "type": "string"
-              },
-              "package-name": {
-                "type": "string"
-              },
-              "include-commit-authors": {
-                "type": "boolean"
-              },
-              "label": true,
-              "release-label": true
-            },
-            "additionalProperties": false
+            "$ref": "#/definitions/ReleaserConfigOptions"
           }
         },
         "bootstrap-sha": {
@@ -631,9 +307,7 @@
                   "type": {
                     "description": "The name of the plugin.",
                     "type": "string",
-                    "enum": [
-                      "linked-versions"
-                    ]
+                    "enum": ["linked-versions"]
                   },
                   "groupName": {
                     "description": "The name of the group of components.",
@@ -658,11 +332,7 @@
                     }
                   }
                 },
-                "required": [
-                  "type",
-                  "groupName",
-                  "components"
-                ]
+                "required": ["type", "groupName", "components"]
               },
               {
                 "description": "Configuration for various `workspace` plugins.",
@@ -671,10 +341,7 @@
                   "type": {
                     "description": "The name of the plugin.",
                     "type": "string",
-                    "enum": [
-                      "cargo-workspace",
-                      "maven-workspace"
-                    ]
+                    "enum": ["cargo-workspace", "maven-workspace"]
                   },
                   "updateAllPackages": {
                     "description": "Whether to force updating all packages regardless of the dependency tree. Defaults to `false`.",
@@ -697,9 +364,7 @@
                   "type": {
                     "description": "The name of the plugin.",
                     "type": "string",
-                    "enum": [
-                      "node-workspace"
-                    ]
+                    "enum": ["node-workspace"]
                   },
                   "updateAllPackages": {
                     "description": "Whether to force updating all packages regardless of the dependency tree. Defaults to `false`.",
@@ -726,9 +391,7 @@
                   "type": {
                     "description": "The name of the plugin.",
                     "type": "string",
-                    "enum": [
-                      "group-priority"
-                    ]
+                    "enum": ["group-priority"]
                   },
                   "groups": {
                     "description": "Group names ordered with highest priority first.",
@@ -789,9 +452,7 @@
           "type": "boolean"
         }
       },
-      "required": [
-        "packages"
-      ]
+      "required": ["packages"]
     }
   ],
   "properties": {
@@ -840,23 +501,6 @@
     "snapshot-label": true,
     "initial-version": true,
     "exclude-paths": true,
-    "component-no-space": false,
-    "component": {
-      "type": "string"
-    },
-    "package-name": {
-      "type": "string"
-    },
-    "include-commit-authors": {
-      "type": "boolean"
-    },
-    "prerelease-type": {
-      "description": "Configuration option for the prerelease versioning strategy. If prerelease strategy used and type set, will set the prerelease part of the version to the provided value in case prerelease part is not present.",
-      "type": "string"
-    },
-    "skip-snapshot": {
-      "description": "If set, do not propose snapshot pull requests. Used by `java` strategies.",
-      "type": "boolean"
-    }
+    "component-no-space": false
   }
 }
