@@ -8,6 +8,23 @@
     // effect for this repo only once merged.
     "github>chinmina/.github//renovate/shared.json5",
   ],
+  customManagers: [
+    {
+      customType: "regex",
+      description: "Versions pinned in validate-release-please-config/versions.env.",
+      managerFilePatterns: ["/^\\.github/actions/validate-release-please-config/versions\\.env$/"],
+      matchStrings: [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: extractVersion=(?<extractVersion>\\S+))?\\n[A-Z_]+=(?<currentValue>\\S+)",
+      ],
+    },
+  ],
   // Local rules only, ordered broad -> narrow: last match wins per-option.
-  packageRules: [],
+  packageRules: [
+    {
+      // RELEASE_PLEASE_VERSION must move with release-please-action's pin.
+      description: "Update validate-release-please-config's pinned versions in the GitHub Actions group.",
+      matchFileNames: [".github/actions/validate-release-please-config/versions.env"],
+      groupName: "GitHub Actions",
+    },
+  ],
 }

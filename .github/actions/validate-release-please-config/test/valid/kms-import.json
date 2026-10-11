@@ -5,8 +5,8 @@
   "packages": {
     ".": {
       "draft": true,
-      "force-tag-creation": true,
-      "initial-version": "0.1.0"
+      "initial-version": "0.1.0",
+      "force-tag-creation": true
     }
   },
   "pull-request-header": "Automated release prepared by Release Please. Changes since the previous release are listed below.\n",

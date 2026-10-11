@@ -98,8 +98,9 @@ the rest are choices worth copying:
 
 | Key | Value | Why (non-default) |
 |-----|-------|-------------------|
-| `include-component-in-tag` | `false` | **Required.** Default `true` prefixes tags (`relic-v0.1.0`), breaking the `v*` trigger, the `v[0-9]*` ruleset, and the `v<semver>` draft lookup. |
+| `include-component-in-tag` | `false` | **Required.** Default `true` prefixes tags (`relic-v0.1.0`), breaking the `v*` trigger and the `v[0-9]*` ruleset. |
 | `packages.".".draft` | `true` | **Required.** The only place to make the release a draft (the action has no `draft` input); `release-please.yml` fails the run without it. |
+| `packages.".".force-tag-creation` | `true` | **Required.** Creates the `v*` tag with the draft (GitHub doesn't tag drafts until they're published), so release-please can find the release when it builds the next Release PR; `release-please.yml` fails the run without it. |
 | `pull-request-header` / `pull-request-footer` | fixed text | **Required, copy verbatim.** Standard Release PR text shared by all repos — do not customise per repo. |
 | `release-type` | `simple` | Tracks the version in the manifest only; no language version files to rewrite (goreleaser stamps it via ldflags). Prefer unless you have a versioned file to keep in sync. |
 | `packages.".".initial-version` | `0.1.0` | Pins the **first** release's version (with the `0.0.0` manifest below). |
