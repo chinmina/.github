@@ -8,7 +8,8 @@ release-please doesn't validate its own config. Unknown keys are ignored, so a
 typo like `"force-tag-creaton"` silently turns the setting off. This action
 validates the config with the [sourcemeta `jsonschema`
 CLI](https://github.com/sourcemeta/jsonschema), run through `mise exec`, against
-release-please's published JSON schema with two corrections derived from
+release-please's published JSON schema, fetched at run time from the pinned
+release-please tag and tightened with two corrections derived from
 release-please's source (`src/manifest.ts`):
 
 - **Strict packages.** The published schema only rejects unknown keys at the
@@ -25,34 +26,35 @@ The kit's own contract (`draft`, `force-tag-creation`) is checked separately in
 
 | File | What it is |
 |------|------------|
-| `release-please-config.upstream.schema.json` | `schemas/config.json` from release-please **v17.6.0**, unmodified |
+| `versions.env` | pinned release-please (schema tag) and sourcemeta `jsonschema` versions, kept current by Renovate |
+| `build-schema.sh` | fetches the schema from the release-please tag and applies `tighten-schema.jq` |
 | `tighten-schema.jq` | the two corrections above |
-| `release-please-config.schema.json` | the schema actually used, generated from the two above |
-| `jsonschema-version` | the pinned sourcemeta `jsonschema` CLI version |
+| `test/run.sh` | builds the schema the same way and checks every fixture |
+| `test/check-version-sync.sh` | checks `RELEASE_PLEASE_VERSION` matches the release-please bundled by the pinned `release-please-action` |
+
+The fetch is schema data from a tag, not code. If it fails, the release run
+fails rather than skipping validation.
 
 ## Keeping it in step
 
-**release-please.** The upstream schema must match the release-please version
-bundled by the pinned `release-please-action` (v5.0.0 bundles v17.6.0). When
-that pin moves, replace the upstream copy, re-check the key lists in
-`tighten-schema.jq` against that version's `extractReleaserConfig` and
-`parseConfig`, and regenerate:
+Renovate updates both versions in `versions.env`, in the same group as the
+GitHub Actions updates, so a `release-please-action` bump and the matching
+release-please version land in one PR. The `validate-release-please-config`
+workflow runs on that PR: it fails if `RELEASE_PLEASE_VERSION` doesn't match
+what the pinned action bundles, and it runs every fixture against the newly
+built schema. Problems surface in that PR, not in a consumer's release.
 
-```sh
-jq -f tighten-schema.jq release-please-config.upstream.schema.json > release-please-config.schema.json
-```
-
-If a consumer uses a key the schema doesn't know, the run fails naming that
-key — update the schema rather than loosening the check.
-
-**The validator.** No Renovate manager covers `jsonschema-version`; bump it by
-hand. mise's `github:` backend checks the download against GitHub's asset
-digest, and against artifact attestations if sourcemeta starts publishing them.
+When release-please moves, re-check the key lists in `tighten-schema.jq`
+against that version's `extractReleaserConfig` and `parseConfig`. A key
+release-please reads but the schema lacks will fail consumers' runs, naming the
+key; add it to `tighten-schema.jq` (and a fixture) rather than loosening the
+check.
 
 ## Tests
 
 ```sh
-test/run.sh                          # via mise exec, as in CI
+test/check-version-sync.sh
+test/run.sh                                  # via mise exec, as in CI
 JSONSCHEMA=/path/to/jsonschema test/run.sh   # with a local binary
 ```
 

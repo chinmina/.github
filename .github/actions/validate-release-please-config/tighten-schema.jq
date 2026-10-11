@@ -9,8 +9,8 @@
 # - Make each package strict. The published schema only rejects unknown keys at
 #   the top level; under packages it allows anything.
 #
-# Regenerate with:
-#   jq -f tighten-schema.jq release-please-config.upstream.schema.json > release-please-config.schema.json
+# Applied at run time by build-schema.sh to the schema fetched from the pinned
+# release-please tag.
 .definitions.ReleaserConfigOptions.properties as $releaser
 | {
     component: {type: "string"},

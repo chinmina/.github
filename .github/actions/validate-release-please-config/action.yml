@@ -23,20 +23,23 @@ runs:
         install: false
         cache: false
 
-    # The github: backend checks the download against GitHub's asset digest,
-    # and against artifact attestations if the release ever publishes them. The
-    # version lives in jsonschema-version (no Renovate manager covers it; bump by
-    # hand). If the install fails, mise exec fails rather than running the
-    # command.
+    # The schema is fetched from the pinned release-please tag and tightened
+    # (build-schema.sh). The validator runs through mise's github: backend,
+    # which checks the download against GitHub's asset digest, and against
+    # artifact attestations if the release ever publishes them. Both versions
+    # live in versions.env, kept current by Renovate. If the fetch or the
+    # install fails, the step fails rather than skipping validation.
     - name: Validate release-please config against the schema
       shell: bash --noprofile --norc -euo pipefail {0}
       env:
         CONFIG_PATH: ${{ inputs.config-path }}
         ACTION_PATH: ${{ github.action_path }}
       run: |
-        version="$(<"${ACTION_PATH}/jsonschema-version")"
-        if ! mise exec "github:sourcemeta/jsonschema@${version}" -- \
-          jsonschema validate "${ACTION_PATH}/release-please-config.schema.json" "${CONFIG_PATH}"; then
+        source "${ACTION_PATH}/versions.env"
+        schema="${RUNNER_TEMP}/release-please-config.schema.json"
+        "${ACTION_PATH}/build-schema.sh" "${schema}"
+        if ! mise exec "github:sourcemeta/jsonschema@${JSONSCHEMA_VERSION}" -- \
+          jsonschema validate "${schema}" "${CONFIG_PATH}"; then
           echo "::error::release-please config does not match the release-please schema (details above). release-please ignores unknown keys silently, so a misspelt setting would simply be off."
           exit 1
         fi
