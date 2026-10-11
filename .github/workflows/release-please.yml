@@ -151,20 +151,21 @@ jobs:
           REF: ${{ github.sha }}
         run: |
           config="$(gh api "repos/${REPO}/contents/${CONFIG_FILE}?ref=${REF}" -H "Accept: application/vnd.github.raw")"
-          # true when key k resolves to true for every package (or at the top
-          # level when no packages are declared). Single-quoted on purpose: the
-          # $c is a jq variable, not a shell one.
-          # shellcheck disable=SC2016
-          enabled='def enabled(k): . as $c
-            | [($c.packages // {})[] | if has(k) then .[k] else $c[k] end]
-            | if length == 0 then $c[k] == true else all(. == true) end;'
+          # Succeeds when key $1 is true for every package once the package's
+          # settings are laid over the top-level ones (`. + $p`: the package
+          # wins, as in release-please). $p and $k are jq variables, hence the
+          # single quotes.
+          enabled() {
+            # shellcheck disable=SC2016
+            jq -e --arg k "$1" '[.packages[] as $p | . + $p | .[$k] == true] | all' <<<"${config}" >/dev/null
+          }
           failed=0
-          if ! jq -e "${enabled} enabled(\"draft\")" <<<"${config}" >/dev/null; then
+          if ! enabled draft; then
             echo "::error::${CONFIG_FILE} does not enable draft releases. Set \"draft\": true (top level, or on every package) so release-please creates a DRAFT release."
             echo "The release wrapper builds and attests artifacts, then flips the release out of draft LAST; without draft, the release is published and publicly downloadable before any attestation exists."
             failed=1
           fi
-          if ! jq -e "${enabled} enabled(\"force-tag-creation\")" <<<"${config}" >/dev/null; then
+          if ! enabled force-tag-creation; then
             echo "::error::${CONFIG_FILE} does not force tag creation. Set \"force-tag-creation\": true (top level, or on every package) so release-please creates the v* tag with the draft release."
             echo "A draft release has no tag until it is published. Without the tag, release-please cannot find the release it just created and opens a Release PR containing the entire commit history."
             failed=1
