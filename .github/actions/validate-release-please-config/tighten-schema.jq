@@ -8,6 +8,8 @@
 #   release-label per package.
 # - Make each package strict. The published schema only rejects unknown keys at
 #   the top level; under packages it allows anything.
+# - Require at least one package: with none, release-please releases nothing and
+#   the contract checks in validate.sh pass vacuously.
 #
 .definitions.ReleaserConfigOptions.properties as $releaser
 | {
@@ -19,6 +21,7 @@
     "prerelease-type": $releaser["prerelease-type"],
     "skip-snapshot": $releaser["skip-snapshot"]
   }
+| (.allOf[] | select(.properties.packages?) | .properties.packages.minProperties) = 1
 | (.allOf[] | select(.properties.packages?) | .properties.packages.additionalProperties) = {
     type: "object",
     properties: ($releaser + $missing + {
