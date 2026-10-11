@@ -1,11 +1,10 @@
 name: Validate release-please config
 description: >-
-  Validate a release-please-config.json against release-please's published
-  schema, tightened so a misspelt key at any level fails. release-please itself
-  ignores unknown keys silently, so a typo just turns the setting off; this
-  stops the release run before anything is created. Uses the sourcemeta
-  jsonschema CLI via `mise exec`, which reports each problem with its line and
-  column.
+  Fail the release run on a release-please-config.json that release-please
+  would accept but misread: release-please ignores unknown keys, so a misspelt
+  setting is silently off. Checks the config against release-please's schema,
+  tightened so unknown keys fail at every level, then requires "draft" and
+  "force-tag-creation".
 
 inputs:
   config-path:
@@ -15,31 +14,16 @@ inputs:
 runs:
   using: composite
   steps:
-    # mise only, no tools: there is no checkout here, and the validator is
-    # installed on demand by `mise exec` below rather than from any config.
+    # mise only: the validator is installed on demand by `mise exec`.
     - name: Install mise
       uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518 # v4.2.5
       with:
         install: false
         cache: false
 
-    # The schema is fetched from the pinned release-please tag and tightened
-    # (build-schema.sh). The validator runs through mise's github: backend,
-    # which checks the download against GitHub's asset digest, and against
-    # artifact attestations if the release ever publishes them. Both versions
-    # live in versions.env, kept current by Renovate. If the fetch or the
-    # install fails, the step fails rather than skipping validation.
-    - name: Validate release-please config against the schema
+    - name: Validate release-please config
       shell: bash --noprofile --norc -euo pipefail {0}
       env:
         CONFIG_PATH: ${{ inputs.config-path }}
         ACTION_PATH: ${{ github.action_path }}
-      run: |
-        source "${ACTION_PATH}/versions.env"
-        schema="${RUNNER_TEMP}/release-please-config.schema.json"
-        "${ACTION_PATH}/build-schema.sh" "${schema}"
-        if ! mise exec "github:sourcemeta/jsonschema@${JSONSCHEMA_VERSION}" -- \
-          jsonschema validate "${schema}" "${CONFIG_PATH}"; then
-          echo "::error::release-please config does not match the release-please schema (details above). release-please ignores unknown keys silently, so a misspelt setting would simply be off."
-          exit 1
-        fi
+      run: '"${ACTION_PATH}/validate.sh" "${CONFIG_PATH}"'

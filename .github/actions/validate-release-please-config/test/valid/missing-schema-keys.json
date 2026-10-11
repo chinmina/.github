@@ -6,6 +6,13 @@
   "prerelease-type": "rc",
   "skip-snapshot": true,
   "packages": {
-    ".": { "component": "x", "package-name": "x", "label": "a", "release-label": "b", "draft": true }
-  }
+    ".": {
+      "component": "x",
+      "package-name": "x",
+      "label": "a",
+      "release-label": "b",
+      "draft": true
+    }
+  },
+  "force-tag-creation": true
 }

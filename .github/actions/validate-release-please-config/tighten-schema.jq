@@ -9,8 +9,6 @@
 # - Make each package strict. The published schema only rejects unknown keys at
 #   the top level; under packages it allows anything.
 #
-# Applied at run time by build-schema.sh to the schema fetched from the pinned
-# release-please tag.
 .definitions.ReleaserConfigOptions.properties as $releaser
 | {
     component: {type: "string"},
@@ -21,7 +19,7 @@
     "prerelease-type": $releaser["prerelease-type"],
     "skip-snapshot": $releaser["skip-snapshot"]
   }
-| .allOf[1].properties.packages.additionalProperties = {
+| (.allOf[] | select(.properties.packages?) | .properties.packages.additionalProperties) = {
     type: "object",
     properties: ($releaser + $missing + {
       label: .properties.label,

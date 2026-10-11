@@ -1,9 +1,7 @@
 name: Validate release-please config check
 
-# Runs when the validator, its pinned versions, or the release-please-action pin
-# change -- including the Renovate PR that bumps them -- so a mismatch or a
-# schema change that breaks real configs is caught in that PR, before any
-# consumer's release run depends on it.
+# Catches a bump to the validator or the release-please pin that would break
+# consumers' release runs, in the PR that makes it.
 
 # No workflow-level GITHUB_TOKEN scope; the single job grants exactly what it needs.
 permissions: {}
@@ -40,11 +38,8 @@ jobs:
           install: false
           cache: false
 
-      # The schema must come from the release-please the pinned action bundles.
       - name: Check RELEASE_PLEASE_VERSION matches release-please-action
         run: .github/actions/validate-release-please-config/test/check-version-sync.sh
 
-      # Builds the schema exactly as the action does and runs every fixture
-      # through the pinned validator.
       - name: Validate fixtures
         run: .github/actions/validate-release-please-config/test/run.sh

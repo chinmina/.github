@@ -1,10 +1,8 @@
 #!/bin/bash
 #
 # Fails when RELEASE_PLEASE_VERSION in versions.env differs from the
-# release-please version bundled by the release-please-action pinned in
-# .github/workflows/release-please.yml. Validating against a schema from a
-# different release-please would reject keys the real one accepts, or miss ones
-# it doesn't.
+# release-please bundled by the release-please-action pinned in
+# .github/workflows/release-please.yml.
 
 set -euo pipefail
 
@@ -15,12 +13,13 @@ main() {
   # shellcheck source-path=SCRIPTDIR/.. source=versions.env
   source "${dir}/versions.env"
 
-  local sha
-  sha="$(grep -oE 'googleapis/release-please-action@[0-9a-f]{40}' "${workflow}" | head -1 | cut -d@ -f2)"
-  if [[ -z "${sha}" ]]; then
-    echo "::error::No SHA-pinned googleapis/release-please-action found in ${workflow}" >&2
+  local -a pins
+  mapfile -t pins < <(grep -oE 'googleapis/release-please-action@[0-9a-f]{40}' "${workflow}" | sort -u)
+  if (( ${#pins[@]} != 1 )); then
+    echo "::error::Expected one SHA-pinned googleapis/release-please-action in ${workflow}, found ${#pins[@]}" >&2
     return 1
   fi
+  local sha="${pins[0]#*@}"
 
   local bundled
   bundled="$(curl --fail --silent --show-error --location --proto '=https' --retry 3 \

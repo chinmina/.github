@@ -1,9 +1,9 @@
 #!/bin/bash
 #
-# Writes the schema the action validates against to the path in $1: release-
-# please's published config schema, fetched from the pinned release-please tag
-# and tightened by tighten-schema.jq. Fetching schema data (not code) from a
-# tag is low risk; a failed fetch fails the run rather than skipping validation.
+# Writes the schema validate.sh checks against to $1: release-please's
+# published config schema from the pinned release-please tag, tightened by
+# tighten-schema.jq. It's data from a tag, not code; a failed fetch fails the
+# run rather than skipping validation.
 
 set -euo pipefail
 
@@ -14,10 +14,9 @@ main() {
   # shellcheck source-path=SCRIPTDIR source=versions.env
   source "${dir}/versions.env"
 
-  local url="https://raw.githubusercontent.com/googleapis/release-please/v${RELEASE_PLEASE_VERSION}/schemas/config.json"
-  curl --fail --silent --show-error --location --proto '=https' --retry 3 "${url}" \
+  curl --fail --silent --show-error --location --proto '=https' --retry 3 \
+    "https://raw.githubusercontent.com/googleapis/release-please/v${RELEASE_PLEASE_VERSION}/schemas/config.json" \
     | jq -f "${dir}/tighten-schema.jq" >"${out}"
-  echo "Built schema from release-please v${RELEASE_PLEASE_VERSION}: ${url}" >&2
 }
 
 main "$@"

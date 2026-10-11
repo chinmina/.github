@@ -11,7 +11,7 @@
   customManagers: [
     {
       customType: "regex",
-      description: "Versions pinned in validate-release-please-config's versions.env (release-please schema tag, sourcemeta jsonschema CLI).",
+      description: "Versions pinned in validate-release-please-config/versions.env.",
       managerFilePatterns: ["/^\\.github/actions/validate-release-please-config/versions\\.env$/"],
       matchStrings: [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: extractVersion=(?<extractVersion>\\S+))?\\n[A-Z_]+=(?<currentValue>\\S+)",
@@ -21,11 +21,8 @@
   // Local rules only, ordered broad -> narrow: last match wins per-option.
   packageRules: [
     {
-      // RELEASE_PLEASE_VERSION has to match the release-please bundled by the
-      // pinned release-please-action, so both move in the same PR; the
-      // validate-release-please-config workflow fails that PR if they don't
-      // agree.
-      description: "Update the validator's pinned versions alongside the GitHub Actions they serve.",
+      // RELEASE_PLEASE_VERSION must move with release-please-action's pin.
+      description: "Update validate-release-please-config's pinned versions in the GitHub Actions group.",
       matchFileNames: [".github/actions/validate-release-please-config/versions.env"],
       groupName: "GitHub Actions",
     },
