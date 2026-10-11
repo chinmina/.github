@@ -14,11 +14,12 @@ first-party kit references ride `@verified-actions` (encoded as zizmor policy in
 
 | Artifact | Kind | Purpose |
 |----------|------|---------|
-| [`release-please.yml`](../.github/workflows/release-please.yml) | reusable workflow | Trigger half: open/update the Release PR, then create a draft release + push the `v*` tag with a minted installation token (App **or** octo-sts). |
+| [`release-please.yml`](../.github/workflows/release-please.yml) | reusable workflow | Trigger half: open/update the Release PR, then create a draft release + its `v*` tag (release-please `force-tag-creation`) with a minted installation token (App **or** octo-sts). |
 | [`goreleaser-release.yml`](../.github/workflows/goreleaser-release.yml) | reusable workflow | goreleaser build → attest → publish wrapper. Serves both Go and Bun projects. |
 | [`setup-release-toolchain`](../.github/actions/setup-release-toolchain/) | composite | One upfront toolchain install: mise CLIs in a single cached pass, plus Go/Bun via their setup actions with versions resolved from mise. |
 | [`attest-artifacts`](../.github/actions/attest-artifacts/) | composite | Keyless build-provenance for the checksummed artifacts (+ `install.sh`). |
 | [`binstaller-install-script`](../.github/actions/binstaller-install-script/) | composite | Generate + attach an attestable `install.sh`. |
+| [`validate-release-please-config`](../.github/actions/validate-release-please-config/) | composite | Check the consumer's `release-please-config.json` against release-please's schema (unknown keys rejected) and the kit's `draft`/`force-tag-creation` contract, before release-please runs. |
 
 > One `goreleaser-release.yml` covers both Go and Bun projects — goreleaser
 > builds both, so there is no separate Bun wrapper. The npm channel is on by
@@ -74,9 +75,10 @@ sequenceDiagram
     RP->>GH: open/update Release PR
     Dev->>GH: merge Release PR
     GH->>RP: on merge
-    RP->>GH: create DRAFT release (no tag)
-    RP->>GH: push v* tag (installation token)
+    RP->>GH: push v* tag (force-tag-creation, installation token)
+    RP->>GH: create DRAFT release for that tag
     Note over RP,GH: installation token → tag push triggers a workflow
+    RP->>GH: open next Release PR (finds the new tag)
     GH->>Rel: on push tag v*
     Rel->>Rel: setup-release-toolchain (Go/Bun via setup actions + mise CLIs)
     Rel->>GH: goreleaser fills the existing draft
@@ -136,7 +138,7 @@ flowchart TB
 | **Variables** | `DOCKERHUB_USER` (Docker/ko login on; read from `vars`, no `inherit` needed) — both scoped to the `release` environment |
 | **Job env** | `release` |
 | **Permissions** | `contents: write`, `id-token: write`, `attestations: write` |
-| **Consumer release-please** | `release-please-config.json` must set `"draft": true` **and** `"include-component-in-tag": false` (validated / relied on by `release-please.yml`; the pinned action has no `draft` input) |
+| **Consumer release-please** | `release-please-config.json` must set `"draft": true`, `"force-tag-creation": true` **and** `"include-component-in-tag": false` (the first two are checked by `validate-release-please-config`; the pinned action has no input for either) |
 | **Consumer goreleaser** | `release.draft: true` + `mode: keep-existing` + `use_existing_draft: true` (all three; preflighted); homebrew via `homebrew_casks:` with `skip_upload: auto`; codegen in `before.hooks` |
 
 ## Quality gate

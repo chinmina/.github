@@ -1,0 +1,18 @@
+{
+  "release-type": "simple",
+  "component": "x",
+  "package-name": "x",
+  "include-commit-authors": true,
+  "prerelease-type": "rc",
+  "skip-snapshot": true,
+  "packages": {
+    ".": {
+      "component": "x",
+      "package-name": "x",
+      "label": "a",
+      "release-label": "b",
+      "draft": true
+    }
+  },
+  "force-tag-creation": true
+}
