@@ -1,7 +1,8 @@
 name: Validate release-please config check
 
-# Catches a bump to the validator or the release-please pin that would break
-# consumers' release runs, in the PR that makes it.
+# Catches a bump to the validator or to release-please-action (whose bundled
+# release-please sets the schema) that would break consumers' release runs, in
+# the PR that makes it.
 
 # No workflow-level GITHUB_TOKEN scope; the single job grants exactly what it needs.
 permissions: {}
@@ -37,9 +38,6 @@ jobs:
         with:
           install: false
           cache: false
-
-      - name: Check RELEASE_PLEASE_VERSION matches release-please-action
-        run: .github/actions/validate-release-please-config/test/check-version-sync.sh
 
       - name: Validate fixtures
         run: .github/actions/validate-release-please-config/test/run.sh

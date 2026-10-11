@@ -151,8 +151,8 @@ jobs:
       # R6: if neither mint step produced a token, fail before release-please.
       - name: Release Please
         id: release
-        # RELEASE_PLEASE_VERSION in validate-release-please-config/versions.env
-        # must match the release-please this bundles.
+        # validate-release-please-config checks configs against the schema of
+        # the release-please this bundles, so moving this pin moves the schema.
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
           # The token is selected inline (never re-emitted to an output) so it
