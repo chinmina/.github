@@ -890,9 +890,8 @@ keep it intact when binstaller is on.
 3. **Push a conventional commit** to the default branch → release-please opens a
    Release PR.
 4. **Merge the Release PR** → a **draft** release appears and a `v*` tag is
-   pushed (by the installation token). `Ensure release tag exists` should
-   report that the tag already exists; a warning means release-please's tag
-   creation was rejected (Step 5).
+   pushed (by the installation token). `Verify release tag` confirms the tag is
+   at the release commit.
 5. **`release.yml` fires** on the tag → goreleaser fills the draft → `install.sh`
    is generated (if binstaller on) → artifacts + `install.sh` are attested →
    the release is published **last**.
@@ -941,7 +940,7 @@ assumption; run them via the pinned invocations below.
 | octo-sts mint fails | App not installed, central policy not merged, `scope` pointing at the repo instead of the owner, or `subject` not environment-qualified | install the App + merge the central policy (1d); keep `scope` = owner; set `subject: …:environment:<env>` (2c) |
 | `release.yml` never fires; the draft's tag is component-prefixed (e.g. `boxed-v0.1.0`) | `release-please-config.json` missing `"include-component-in-tag": false` | set `"include-component-in-tag": false` so the tag is plain `v<semver>` (1e) |
 | The minted token can't push the `v*` tag; pipeline stalls at "draft, no tag" | a `tag creation` ruleset restricts the ref with no bypass for the App | add the App as an `Integration`/`bypass_mode: always` bypass actor on the *restricting* ruleset (1f) |
-| `Ensure release tag exists` warns "release-please did not create tag …", or the next Release PR lists the entire commit history | release-please's tag creation was rejected (it treats any 422 as "already exists"), usually by a tag ruleset without the App bypass | add the App bypass (1f); close the bad Release PR — the next push to the default branch rebuilds it from the tag |
+| `Verify release tag` fails: "release-please did not create tag …" | release-please's tag creation was rejected (it treats any 422 as "already exists"), usually by a tag ruleset without the App bypass | add the App bypass (1f), then push the tag at the release commit by hand to trigger `release.yml`; close the Release PR that run opened — the next push to the default branch rebuilds it from the tag |
 | Homebrew step fails to auth on the octo-sts path | `release-tap` policy missing the repo, or repo not in the `claim_pattern.repository` alternation | add the repo to the shared `release-tap` policy (2c) |
 | `uses: chinmina/.github/...` blocked | owner policy disallows `chinmina/*` | allow `chinmina/*` in the owner's Actions settings (1c) |
 | `release-please.yml` fails: `"draft": true is required` or `"force-tag-creation": true is required` | the key is missing, or a package sets it false | set it to `true` at the top level of `release-please-config.json` (1e) |

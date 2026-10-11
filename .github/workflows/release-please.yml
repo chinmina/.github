@@ -161,11 +161,11 @@ jobs:
           config-file: ${{ inputs.config-file }}
           manifest-file: ${{ inputs.manifest-file }}
 
-      # R3/R4/R7: backstop for release-please's own tag creation, which treats
-      # any 422 (e.g. a tag ruleset without a bypass for the App) as "already
-      # exists". The installation token, never GITHUB_TOKEN, is what lets the
-      # tag push trigger the release wrapper.
-      - name: Ensure release tag exists
+      # R3/R4/R7: release-please creates the tag (force-tag-creation) but treats
+      # any 422, such as a tag ruleset without a bypass for the App, as "already
+      # exists" and carries on. Fail loudly instead: without the tag the release
+      # wrapper never runs and the next Release PR covers the entire history.
+      - name: Verify release tag
         if: ${{ steps.release.outputs.release_created }}
         env:
           GH_TOKEN: ${{ inputs.token-source == 'app' && steps.app-token.outputs.token || steps.octo-sts.outputs.token }}
@@ -175,17 +175,12 @@ jobs:
         run: |
           # On an HTTP error gh prints the error body to stdout and ignores
           # --jq, so branch on the exit status rather than the output.
-          if existing_sha="$(gh api "repos/${REPO}/git/ref/tags/${TAG}" --jq '.object.sha' 2>/dev/null)"; then
-            if [[ "${existing_sha}" == "${TARGET_SHA}" ]]; then
-              echo "Tag ${TAG} already exists at ${TARGET_SHA} (created by release-please)."
-              exit 0
-            fi
-            echo "::error::Tag ${TAG} exists at ${existing_sha}, not the release commit ${TARGET_SHA}."
+          if ! tag_sha="$(gh api "repos/${REPO}/git/ref/tags/${TAG}" --jq '.object.sha' 2>/dev/null)"; then
+            echo "::error::release-please did not create tag ${TAG}. Its tag creation was most likely rejected by a v* tag ruleset; give the release App a bypass on that ruleset."
             exit 1
           fi
-          echo "::warning::release-please did not create tag ${TAG}; creating it at ${TARGET_SHA} via the installation token. Check that the minted App can bypass any v* tag ruleset, otherwise the next Release PR will be built without this tag."
-          gh api \
-            --method POST \
-            "repos/${REPO}/git/refs" \
-            -f "ref=refs/tags/${TAG}" \
-            -f "sha=${TARGET_SHA}"
+          if [[ "${tag_sha}" != "${TARGET_SHA}" ]]; then
+            echo "::error::Tag ${TAG} is at ${tag_sha}, not the release commit ${TARGET_SHA}."
+            exit 1
+          fi
+          echo "Tag ${TAG} is at the release commit ${TARGET_SHA}."
