@@ -138,6 +138,40 @@
       separateMultipleMajor: true,
     },
     {
+      // Scope: any version-like ref. Branch refs (main) and moving refs
+      // (verified-actions) don't match and keep default behaviour.
+      // Candidates are full stable releases only. The regex also parses a
+      // prerelease current value, so it can move to a stable release.
+      description: "Track pinned GitHub Actions by full SemVer release tags.",
+      matchManagers: ["github-actions"],
+      matchDepTypes: ["action", "workflow"],
+      matchCurrentValue: "/^v?\\d/",
+      extractVersion: "^(?<version>v?\\d+\\.\\d+\\.\\d+)$",
+      versioning: "regex:^v?(?<major>\\d+)(\\.(?<minor>\\d+)(\\.(?<patch>\\d+))?)?(-(?<prerelease>[0-9A-Za-z.-]+))?$",
+    },
+    {
+      // npm versioning reads v7 / v7.1 as ranges, so rangeStrategy "pin"
+      // rewrites them to the exact release (v7 -> v7.0.0) when pinning or
+      // updating. Prereleases are excluded: their current version is not
+      // among the stable-only candidates, which npm rejects as invalid-value.
+      description: "Pin floating major/minor action tags to their exact release.",
+      matchManagers: ["github-actions"],
+      matchDepTypes: ["action", "workflow"],
+      matchCurrentValue: "/^v?\\d+(\\.\\d+){0,2}$/",
+      versioning: "npm",
+      rangeStrategy: "pin",
+    },
+    {
+      // A digest-only update keeps the floating tag (# v5 -> # v5 at a new
+      // digest). Version-tagged refs move through version updates instead.
+      description: "Do not follow floating tags through digest-only updates.",
+      matchManagers: ["github-actions"],
+      matchDepTypes: ["action", "workflow"],
+      matchCurrentValue: "/^v?\\d/",
+      matchUpdateTypes: ["digest"],
+      enabled: false,
+    },
+    {
       // pinGitHubActionDigests assigns depType "action" to normal action refs
       // and "workflow" to reusable workflow refs (lib/modules/manager/github-actions/extract.ts).
       // Both depTypes must be listed here or reusable-workflow consumers of
