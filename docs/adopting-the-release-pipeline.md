@@ -568,7 +568,8 @@ references it until the repository exposes it, so commit these once:
     inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     outputs = { self, nixpkgs }:
       let
-        systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
+        # nixpkgs 26.11 dropped x86_64-darwin and throws on evaluating it.
+        systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ];
         forAllSystems = f: nixpkgs.lib.genAttrs systems (s: f nixpkgs.legacyPackages.${s});
       in {
         packages = forAllSystems (pkgs: import ./default.nix { inherit pkgs; });
@@ -577,8 +578,9 @@ references it until the repository exposes it, so commit these once:
   }
   ```
 
-Both files discover every directory under `pkgs/`, so a new tool needs no edit
-to the repository. The `nixpkgs` input only supplies the build helpers the
+[jamestelfer/nixpkgs](https://github.com/jamestelfer/nixpkgs) is the reference
+instance. Both files discover every directory under `pkgs/`, so a new tool needs
+no edit to the repository. The `nixpkgs` input only supplies the build helpers the
 recipes use; nothing is published to nixpkgs itself. Nothing runs at publish
 time either: Nix evaluates the flake when a user installs from it.
 
