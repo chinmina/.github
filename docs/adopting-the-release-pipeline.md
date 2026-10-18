@@ -565,11 +565,11 @@ references it until the repository exposes it, so commit these once:
   ```nix
   {
     description = "Nix packages published by <OWNER>";
-    inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
     outputs = { self, nixpkgs }:
       let
-        # nixpkgs 26.11 dropped x86_64-darwin and throws on evaluating it.
-        systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ];
+        # 26.05 is the last nixpkgs release supporting x86_64-darwin.
+        systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
         forAllSystems = f: nixpkgs.lib.genAttrs systems (s: f nixpkgs.legacyPackages.${s});
       in {
         packages = forAllSystems (pkgs: import ./default.nix { inherit pkgs; });
