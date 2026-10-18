@@ -568,11 +568,18 @@ references it until the repository exposes it, so commit these once:
     inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
     outputs = { self, nixpkgs }:
       let
-        # 26.05 is the last nixpkgs release supporting x86_64-darwin.
-        systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
-        forAllSystems = f: nixpkgs.lib.genAttrs systems (s: f nixpkgs.legacyPackages.${s});
+        inherit (nixpkgs) lib;
+        # Every platform goreleaser's nix publisher can emit. 26.05 is the last
+        # nixpkgs release supporting x86_64-darwin.
+        systems = [ "x86_64-linux" "aarch64-linux" "i686-linux" "armv6l-linux"
+                    "armv7l-linux" "x86_64-darwin" "aarch64-darwin" ];
+        forAllSystems = f: lib.genAttrs systems (s: f nixpkgs.legacyPackages.${s});
       in {
-        packages = forAllSystems (pkgs: import ./default.nix { inherit pkgs; });
+        # Projects release different platforms: list each tool only on the
+        # systems its recipe (meta.platforms) has an archive for.
+        packages = forAllSystems (pkgs:
+          lib.filterAttrs (_: pkg: lib.meta.availableOn pkgs.stdenv.hostPlatform pkg)
+            (import ./default.nix { inherit pkgs; }));
         overlays.default = final: _: import ./default.nix { pkgs = final; };
       };
   }
