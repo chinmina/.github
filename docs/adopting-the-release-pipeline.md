@@ -21,7 +21,7 @@ Answer these before touching any files. Everything downstream keys off them.
 |---|-----------|---------|---------------|
 | 1 | **Toolchain** | `goreleaser-release.yml` | One wrapper for both Go and Bun projects — goreleaser builds either. Declare the toolchain (`go` and/or `bun`) in mise; the wrapper sets it up automatically. |
 | 2 | **Token source** | `app` / `octo-sts` | **`app`** = a GitHub App installation token (App installed + stored `RELEASE_PLEASE_*` secrets). **`octo-sts`** = keyless OIDC, no stored key, trust policies centralised in the owner's `.github`. Choose per repo based on what the owner (org **or** user) has set up — the **chinmina** org uses `app`; another owner may use `octo-sts`. |
-| 3 | **Channels** | GitHub release (always), binstaller (default on), homebrew (default on), nix (default on), Docker/ko login (default on), npm (default on) | Disable a channel by passing `disable-<channel>: true` to `goreleaser-release.yml`. nix defaults on: it installs Nix and mints the package-repo token, so a project that publishes no Nix recipe passes `disable-nix: true`. Docker/ko login defaults on and **fails fast** unless the `release` environment defines `DOCKERHUB_USER`; publish no image → pass `disable-docker-login: true`. npm defaults on and **fails fast** unless `npm-package-name` is set and the main package dir exists; publish no npm package → pass `disable-npm: true`. Each enabled channel that needs a credential is a prerequisite (see Step 1). |
+| 3 | **Channels** | GitHub release (always), binstaller (default on), homebrew (default on), nix (default on), Docker/ko login (default on), npm (default on) | Every channel is on by default. The caller lists only the channels it does not ship, as `disable-<channel>: true`; enabling a channel means deleting its line, never setting it to `false`. nix defaults on: it installs Nix and mints the package-repo token, so a project that publishes no Nix recipe passes `disable-nix: true`. Docker/ko login defaults on and **fails fast** unless the `release` environment defines `DOCKERHUB_USER`; publish no image → pass `disable-docker-login: true`. npm defaults on and **fails fast** unless `npm-package-name` is set and the main package dir exists; publish no npm package → pass `disable-npm: true`. Each enabled channel that needs a credential is a prerequisite (see Step 1). |
 | 4 | **Repo state** | greenfield / has existing release automation | If the repo already releases via another mechanism, you are **migrating**: the old trigger and the new one must not both run. Disable/delete the old workflow in the same change. |
 
 Record your four answers — later steps say "if `octo-sts` …", "if homebrew on …".
@@ -370,20 +370,19 @@ jobs:
     uses: chinmina/.github/.github/workflows/goreleaser-release.yml@verified-actions # zizmor: ignore[secrets-inherit]
     with:
       token-source: <app|octo-sts>       # must match Step 0.2 / the release-please caller
-      # Channels: omit a line to keep the default (binstaller + homebrew + nix on).
-      disable-binstaller: <true|false>   # default false
-      disable-homebrew: <true|false>     # default false
-      disable-nix: <true|false>          # default false — set true if no Nix recipe
-      # npm defaults ON. Provide npm-package-name + a main package dir, or
-      # opt out explicitly with disable-npm: true.
-      disable-npm: <true|false>          # default false — set true if no npm package
-      npm-package-name: "@<OWNER>/<REPO>"  # required unless disable-npm: true
-      # npm-main-package-dir: ".github/workflows/npm/main"  # default
-      # Docker/ko login defaults ON and FAILS FAST without a DOCKERHUB_USER
-      # variable in the `release` environment. Publish an image? set
+      # Channels: every channel is on by default. List ONLY the channels this
+      # repo does not ship; delete the line for every channel it does ship.
+      disable-binstaller: true           # no install.sh
+      disable-homebrew: true             # no Homebrew cask
+      disable-nix: true                  # no Nix recipe
+      disable-npm: true                  # no npm package
+      # Docker/ko login FAILS FAST without a DOCKERHUB_USER variable in the
+      # `release` environment. Publish an image? delete this line, set
       # DOCKERHUB_USER + DOCKERHUB_TOKEN there and pass extra-mise-tools: cosign.
-      # No image? opt out explicitly:
-      disable-docker-login: <true|false> # default false — set true if no image
+      disable-docker-login: true         # no container image
+      # npm shipped (disable-npm line deleted)? npm-package-name is required:
+      # npm-package-name: "@<OWNER>/<REPO>"
+      # npm-main-package-dir: ".github/workflows/npm/main"  # default
       # extra-mise-tools: cosign         # signing CLIs for goreleaser ko/docker (declare in mise.toml)
       # pre-build: "<shell>"             # only if codegen is NOT in goreleaser before.hooks
     # SECRETS (see 2a for the environment-scoping rationale):

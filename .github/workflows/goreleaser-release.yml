@@ -150,8 +150,8 @@ on:
       disable-npm:
         description: >-
           Opt out of npm publication (R31). Publication defaults ON, so projects
-          that publish NO npm package must set this true. When false (default),
-          npm-package-name is required.
+          that publish NO npm package must set this true. When npm is on (the
+          default), npm-package-name is required.
         required: false
         type: boolean
         default: false

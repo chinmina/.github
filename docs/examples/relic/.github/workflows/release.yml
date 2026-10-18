@@ -26,8 +26,8 @@ jobs:
       # Keyless: mint the release-relic token (and release-tap when homebrew is
       # on) against the centralised org policies instead of github.token/a PAT.
       token-source: octo-sts
-      # GH release + binstaller on (defaults). relic ships no formula yet; flip
-      # disable-homebrew off to start using the (already-provisioned) release-tap
+      # GH release + binstaller on (defaults). relic ships no formula yet; delete
+      # this line to start using the (already-provisioned) release-tap
       # mint + tap policy.
       disable-homebrew: true
       # relic ships no Nix recipe. Nix defaults ON (it installs Nix and mints the

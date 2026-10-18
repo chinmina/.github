@@ -125,14 +125,14 @@ hand-edit it after.
 - The `.sts.yaml` `permissions` / `subject` / `claim_pattern` shape should be
   confirmed against the current octo-sts policy schema on first setup.
 - Homebrew is off for relic today; the `release-tap` policy is pre-provisioned,
-  so enabling it later is just `disable-homebrew:` off + a goreleaser
-  `homebrew_casks:` block (not the deprecated `brews:`) pointing at
+  so enabling it later is just deleting the `disable-homebrew` line + a
+  goreleaser `homebrew_casks:` block (not the deprecated `brews:`) pointing at
   `<org>/homebrew-tap`, with `skip_upload: auto` and the quarantine-xattr
   removal hook — see [Step 2d](../../adopting-the-release-pipeline.md#2d-goreleaser-config-keys-merge-into-goreleaseryaml).
-- Nix is off for relic today. Enabling it is `disable-nix:` off + a goreleaser
-  `nix:` block pointing at `<org>/nixpkgs`, with `skip_upload: auto` and no
-  `main_program`/`formatter` — see the same step. The shared `release-tap`
-  policy already lists `nixpkgs`.
+- Nix is off for relic today. Enabling it is deleting the `disable-nix` line +
+  a goreleaser `nix:` block pointing at `<org>/nixpkgs`, with
+  `skip_upload: auto` and no `main_program`/`formatter` — see the same step.
+  The shared `release-tap` policy already lists `nixpkgs`.
 - relic's own `README.md` needs the standard `## Installation` (mise + install
   script + manual download blocks — Homebrew off) and `## Verifying releases`
   sections so users can install and verify the attested artifacts the pipeline
