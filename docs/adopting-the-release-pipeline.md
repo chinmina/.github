@@ -87,14 +87,12 @@ secrets, so callers omit `secrets:` entirely (and drop the
 |---------------|--------|-------------|
 | `token-source: app` | `RELEASE_PLEASE_CLIENT_ID` | `automation` |
 | `token-source: app` | `RELEASE_PLEASE_APP_PRIVATE_KEY` | `automation` |
-| homebrew on **and** `token-source: app` | `HOMEBREW_GITHUB_TOKEN` (write to the tap repo) | `release` |
 | Docker/ko login on (default) | `DOCKERHUB_TOKEN` (Docker Hub password/access token) | `release` |
 | npm channel on (default) | *(none — OIDC trusted publishing; no stored token needed)* | — |
 
 `token-source: octo-sts` stores **no** secret — that is the point. On that path
-even the Homebrew tap write is a keyless mint (the `release-tap` identity), so
-`HOMEBREW_GITHUB_TOKEN` is *not* needed. binstaller and the GitHub-release
-channel never need a secret (keyless OIDC / `github.token`).
+even the Homebrew tap write is a keyless mint (the `release-tap` identity).
+binstaller and the GitHub-release channel never need a secret (keyless OIDC / `github.token`).
 
 **Variables (not secrets).** Docker login also needs the **username**, which is
 non-sensitive and read from the `vars` context, not `secrets`. Define
@@ -369,9 +367,9 @@ jobs:
       # extra-mise-tools: cosign         # signing CLIs for goreleaser ko/docker (declare in mise.toml)
       # pre-build: "<shell>"             # only if codegen is NOT in goreleaser before.hooks
     # SECRETS (see 2a for the environment-scoping rationale):
-    #  * app + homebrew: keep `secrets: inherit` (HOMEBREW_GITHUB_TOKEN is
+    #  * Docker/ko login on: keep `secrets: inherit` (DOCKERHUB_TOKEN is
     #    environment-scoped, so inherit is required).
-    #  * octo-sts, OR app without homebrew: DELETE the `secrets:` line and the
+    #  * otherwise: DELETE the `secrets:` line and the
     #    `# zizmor: ignore[secrets-inherit]` comment above — nothing to pass.
     secrets: inherit
 ```
@@ -478,7 +476,7 @@ homebrew_casks:
     repository:
       owner: <OWNER>
       name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_GITHUB_TOKEN }}" # app path: PAT; octo-sts: minted tap token
+      token: "{{ .Env.HOMEBREW_GITHUB_TOKEN }}" # set by the wrapper from the minted tap token
     # skip publishing the cask on a prerelease. release.prerelease: auto only
     # marks the RELEASE as prerelease — it does NOT gate the cask push, so
     # without this an RC tag would publish the cask.
@@ -949,7 +947,7 @@ assumption; run them via the pinned invocations below.
 | Homebrew cask published on a prerelease/RC tag | cask block missing `skip_upload: auto` | add `skip_upload: auto` to the `homebrew_casks:` entry (2d) |
 | `setup-release-toolchain` fails: tool not declared | required tool missing from `mise.toml` | declare `go`/`goreleaser` (and `binstaller` when on — it needs `[tool_alias]` + `rename_exe`) in `mise.toml` (1e) |
 | Publish gate silently absent | `automation`/`release` auto-created ungated | create them with protection rules *before* first run (1a) |
-| homebrew step fails on auth | `HOMEBREW_GITHUB_TOKEN` missing/unscoped, or channel left on | add the env-scoped token, or `disable-homebrew: true` (1b/2b) |
+| homebrew step fails on auth with `token-source: app` | the app path mints no tap token | switch to `token-source: octo-sts`, or `disable-homebrew: true` (2b) |
 | `release.yml` fails at *Validate docker login inputs* | Docker login on (default) but `DOCKERHUB_USER` unset in the `release` environment | set `DOCKERHUB_USER` (variable) + `DOCKERHUB_TOKEN` (secret) in `release`, or `disable-docker-login: true` (1b/2b) |
 | image push fails / lands on `ttl.sh` instead of Docker Hub | `KO_DOCKER_REPO` not set for CI in your goreleaser config | set `KO_DOCKER_REPO` keyed off `CI` in goreleaser/`mise.toml [env]` — the wrapper never sets it (2d) |
 | npm publish fails: "401 Unauthorized" or OIDC rejection | trusted publisher not configured on npmjs.com, wrong workflow filename, wrong environment name, or wrong repo | configure trusted publisher per package with `release.yml` (caller) + `release` env (2e) |

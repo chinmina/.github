@@ -16,11 +16,8 @@
 # pass and sets up Go and/or Bun via their setup actions, per what the repo
 # declares in mise.
 #
-# Consumers call this at @verified-actions. On the `app` token-source with
-# homebrew enabled they pass HOMEBREW_GITHUB_TOKEN via `secrets: inherit` (it is
-# environment-scoped, so only the reusable workflow's env-targeting job can
-# resolve it). The keyless octo-sts path needs NO secrets, so its callers omit
-# `secrets:` entirely.
+# Consumers call this at @verified-actions. The keyless octo-sts path needs NO
+# secrets, so its callers omit `secrets:` entirely.
 #
 # Docker / ko image publishing: the wrapper does NOT build, sign, or push images
 # and NEVER sets KO_DOCKER_REPO -- image build/sign/push stay entirely in the
@@ -45,23 +42,13 @@ name: Release
 on:
   workflow_call:
     secrets:
-      # App-path + homebrew only. ENVIRONMENT-scoped to `release` and consumed by
-      # the release job below (which runs in that environment). A reusable-
-      # workflow CALL job cannot hold an `environment:`, so a narrowed caller
-      # `secrets:` map would resolve EMPTY; the caller therefore delivers it with
-      # `secrets: inherit` and marks that line `# zizmor: ignore[secrets-inherit]`
-      # so the broad pass is clearly intended. The octo-sts path is keyless (it
-      # mints the tap token) and passes nothing.
-      HOMEBREW_GITHUB_TOKEN:
-        description: >-
-          Homebrew tap write token. Required only for token-source "app" with
-          homebrew enabled; consumed by the release job in the `release`
-          environment. The octo-sts path mints the tap token instead.
-        required: false
-      # Container-registry (Docker Hub) password/token. Same delivery model as
-      # HOMEBREW_GITHUB_TOKEN: ENVIRONMENT-scoped to `release`, so a narrowed
-      # caller `secrets:` map would resolve EMPTY -- the caller delivers it with
-      # `secrets: inherit`. Its paired username is the release-environment
+      # Container-registry (Docker Hub) password/token. ENVIRONMENT-scoped to
+      # `release` and consumed by the release job below (which runs in that
+      # environment). A reusable-workflow CALL job cannot hold an `environment:`,
+      # so a narrowed caller `secrets:` map would resolve EMPTY; the caller
+      # therefore delivers it with `secrets: inherit` and marks that line
+      # `# zizmor: ignore[secrets-inherit]` so the broad pass is clearly
+      # intended. Its paired username is the release-environment
       # variable DOCKERHUB_USER (read via the vars context, no inherit needed).
       # Only used by the login step below, gated on `disable-docker-login`.
       DOCKERHUB_TOKEN:
@@ -98,9 +85,8 @@ on:
       token-source:
         description: >-
           Write-token source for the release job. "app" (default) uses
-          github.token (and secrets.HOMEBREW_GITHUB_TOKEN for the tap).
-          "octo-sts" mints keyless OIDC tokens against the centralised org
-          trust policies instead (no stored tap PAT).
+          github.token. "octo-sts" mints keyless OIDC tokens against the
+          centralised org trust policies instead, including the tap token.
         required: false
         type: string
         default: app
@@ -292,7 +278,7 @@ jobs:
           identity: ${{ inputs.sts-release-identity != '' && inputs.sts-release-identity || format('release-{0}', github.event.repository.name) }}
 
       # octo-sts path: mint a contents:write token for the SHARED Homebrew tap,
-      # only when homebrew is on. Keyless — replaces a stored tap PAT.
+      # only when homebrew is on. Keyless — no stored tap credential.
       - name: Mint tap token (octo-sts)
         id: tap-token
         if: ${{ inputs.token-source == 'octo-sts' && !inputs.disable-homebrew }}
@@ -349,7 +335,7 @@ jobs:
       - name: Build (goreleaser)
         env:
           GITHUB_TOKEN: ${{ inputs.token-source == 'octo-sts' && steps.release-token.outputs.token || github.token }}
-          HOMEBREW_GITHUB_TOKEN: ${{ !inputs.disable-homebrew && (inputs.token-source == 'octo-sts' && steps.tap-token.outputs.token || secrets.HOMEBREW_GITHUB_TOKEN) || '' }}
+          HOMEBREW_GITHUB_TOKEN: ${{ steps.tap-token.outputs.token }}
         run: goreleaser release --clean
 
       # Channel: binstaller. Generate install.sh (attested below, published with

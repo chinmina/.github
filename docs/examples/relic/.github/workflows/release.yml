@@ -40,6 +40,4 @@ jobs:
       # npm: drop this, set npm-package-name, and commit a main package dir.
       disable-npm: true
       # templ codegen runs in goreleaser before.hooks, so no pre-build needed.
-    # No `secrets:` block: the octo-sts path is keyless. (On the `app` path with
-    # homebrew you would add `secrets: inherit` so the environment-scoped
-    # HOMEBREW_GITHUB_TOKEN resolves inside the reusable workflow's job.)
+    # No `secrets:` block: the octo-sts path is keyless.
