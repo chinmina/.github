@@ -26,10 +26,14 @@ jobs:
       # Keyless: mint the release-relic token (and release-tap when homebrew is
       # on) against the centralised org policies instead of github.token/a PAT.
       token-source: octo-sts
-      # GH release + binstaller on (defaults). relic ships no formula yet; flip
-      # disable-homebrew off to start using the (already-provisioned) release-tap
+      # GH release + binstaller on (defaults). relic ships no formula yet; delete
+      # this line to start using the (already-provisioned) release-tap
       # mint + tap policy.
       disable-homebrew: true
+      # relic ships no Nix recipe. Nix defaults ON (it installs Nix and mints the
+      # package-repo token), so opt out explicitly. To start publishing: drop
+      # this and add a goreleaser `nix:` block pointing at <org>/nixpkgs.
+      disable-nix: true
       # relic ships no container image; Docker/ko login defaults ON and fails
       # fast without a DOCKERHUB_USER variable, so opt out explicitly. To start
       # publishing an image: drop this, set DOCKERHUB_USER + DOCKERHUB_TOKEN in
@@ -40,6 +44,4 @@ jobs:
       # npm: drop this, set npm-package-name, and commit a main package dir.
       disable-npm: true
       # templ codegen runs in goreleaser before.hooks, so no pre-build needed.
-    # No `secrets:` block: the octo-sts path is keyless. (On the `app` path with
-    # homebrew you would add `secrets: inherit` so the environment-scoped
-    # HOMEBREW_GITHUB_TOKEN resolves inside the reusable workflow's job.)
+    # No `secrets:` block: the octo-sts path is keyless.
