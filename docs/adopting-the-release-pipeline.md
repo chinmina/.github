@@ -87,6 +87,7 @@ secrets, so callers omit `secrets:` entirely (and drop the
 |---------------|--------|-------------|
 | `token-source: app` | `RELEASE_PLEASE_CLIENT_ID` | `automation` |
 | `token-source: app` | `RELEASE_PLEASE_APP_PRIVATE_KEY` | `automation` |
+| homebrew on **and** `token-source: app` | `RELEASE_PLEASE_CLIENT_ID` + `RELEASE_PLEASE_APP_PRIVATE_KEY` (same App; mints the tap token) | `release` |
 | Docker/ko login on (default) | `DOCKERHUB_TOKEN` (Docker Hub password/access token) | `release` |
 | npm channel on (default) | *(none — OIDC trusted publishing; no stored token needed)* | — |
 
@@ -251,6 +252,21 @@ post-install steps needed.
       commits are GitHub-signed) — flag it as a *confirm on first run* item, not
       a blocker.
 
+### 1g. App path + homebrew only
+
+The release job mints the tap token from the same GitHub App as
+release-please, scoped to `contents: write` on `homebrew-tap` alone.
+
+- [ ] The owner has a `homebrew-tap` repository.
+- [ ] The App behind `RELEASE_PLEASE_CLIENT_ID` is installed on
+      `homebrew-tap` with `contents: write`. On a *selected repositories*
+      installation, add the tap explicitly.
+- [ ] The App is an `always` bypass actor on the tap's branch-protection
+      ruleset. goreleaser pushes unsigned commits straight to the default
+      branch, so a PR or signed-commit rule without the bypass rejects them.
+- [ ] Both App secrets exist in the `release` environment, not just
+      `automation` (1b), and the caller keeps `secrets: inherit` (2b).
+
 ---
 
 ## Step 2 — Files to add
@@ -367,7 +383,8 @@ jobs:
       # extra-mise-tools: cosign         # signing CLIs for goreleaser ko/docker (declare in mise.toml)
       # pre-build: "<shell>"             # only if codegen is NOT in goreleaser before.hooks
     # SECRETS (see 2a for the environment-scoping rationale):
-    #  * Docker/ko login on: keep `secrets: inherit` (DOCKERHUB_TOKEN is
+    #  * Docker/ko login on, OR app + homebrew: keep `secrets: inherit`
+    #    (DOCKERHUB_TOKEN and the RELEASE_PLEASE_* App secrets are
     #    environment-scoped, so inherit is required).
     #  * otherwise: DELETE the `secrets:` line and the
     #    `# zizmor: ignore[secrets-inherit]` comment above — nothing to pass.
@@ -947,7 +964,8 @@ assumption; run them via the pinned invocations below.
 | Homebrew cask published on a prerelease/RC tag | cask block missing `skip_upload: auto` | add `skip_upload: auto` to the `homebrew_casks:` entry (2d) |
 | `setup-release-toolchain` fails: tool not declared | required tool missing from `mise.toml` | declare `go`/`goreleaser` (and `binstaller` when on — it needs `[tool_alias]` + `rename_exe`) in `mise.toml` (1e) |
 | Publish gate silently absent | `automation`/`release` auto-created ungated | create them with protection rules *before* first run (1a) |
-| homebrew step fails on auth with `token-source: app` | the app path mints no tap token | switch to `token-source: octo-sts`, or `disable-homebrew: true` (2b) |
+| *Mint tap token (GitHub App)* fails | App not installed on `homebrew-tap`, the tap repo doesn't exist, or the App secrets are missing from the `release` environment | install the App on the tap, create the repo, or add both secrets to `release` and keep `secrets: inherit` (1b/1g/2b) |
+| homebrew push to the tap rejected (`app` path) | the App is not an `always` bypass actor on the tap's ruleset | add the bypass (1g) |
 | `release.yml` fails at *Validate docker login inputs* | Docker login on (default) but `DOCKERHUB_USER` unset in the `release` environment | set `DOCKERHUB_USER` (variable) + `DOCKERHUB_TOKEN` (secret) in `release`, or `disable-docker-login: true` (1b/2b) |
 | image push fails / lands on `ttl.sh` instead of Docker Hub | `KO_DOCKER_REPO` not set for CI in your goreleaser config | set `KO_DOCKER_REPO` keyed off `CI` in goreleaser/`mise.toml [env]` — the wrapper never sets it (2d) |
 | npm publish fails: "401 Unauthorized" or OIDC rejection | trusted publisher not configured on npmjs.com, wrong workflow filename, wrong environment name, or wrong repo | configure trusted publisher per package with `release.yml` (caller) + `release` env (2e) |

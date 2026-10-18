@@ -16,7 +16,10 @@
 # pass and sets up Go and/or Bun via their setup actions, per what the repo
 # declares in mise.
 #
-# Consumers call this at @verified-actions. The keyless octo-sts path needs NO
+# Consumers call this at @verified-actions. On the `app` token-source with
+# homebrew enabled they pass the RELEASE_PLEASE_* App secrets via `secrets:
+# inherit` (they are environment-scoped, so only the reusable workflow's
+# env-targeting job can resolve them). The keyless octo-sts path needs NO
 # secrets, so its callers omit `secrets:` entirely.
 #
 # Docker / ko image publishing: the wrapper does NOT build, sign, or push images
@@ -42,6 +45,26 @@ name: Release
 on:
   workflow_call:
     secrets:
+      # App path + homebrew only. The same GitHub App credentials release-please
+      # uses, here minting the tap write token. ENVIRONMENT-scoped to `release`
+      # (as well as `automation`) and consumed by the release job below (which
+      # runs in that environment). A reusable-workflow CALL job cannot hold an
+      # `environment:`, so a narrowed caller `secrets:` map would resolve EMPTY;
+      # the caller therefore delivers them with `secrets: inherit` and marks that
+      # line `# zizmor: ignore[secrets-inherit]` so the broad pass is clearly
+      # intended. The octo-sts path is keyless and passes neither.
+      RELEASE_PLEASE_CLIENT_ID:
+        description: >-
+          GitHub App client ID. Required only for token-source "app" with
+          homebrew enabled; consumed by the release job in the `release`
+          environment to mint the tap token.
+        required: false
+      RELEASE_PLEASE_APP_PRIVATE_KEY:
+        description: >-
+          GitHub App private key. Required only for token-source "app" with
+          homebrew enabled; consumed by the release job in the `release`
+          environment to mint the tap token.
+        required: false
       # Container-registry (Docker Hub) password/token. ENVIRONMENT-scoped to
       # `release` and consumed by the release job below (which runs in that
       # environment). A reusable-workflow CALL job cannot hold an `environment:`,
@@ -85,8 +108,9 @@ on:
       token-source:
         description: >-
           Write-token source for the release job. "app" (default) uses
-          github.token. "octo-sts" mints keyless OIDC tokens against the
-          centralised org trust policies instead, including the tap token.
+          github.token for the release and mints the tap token from the GitHub
+          App. "octo-sts" mints keyless OIDC tokens against the centralised org
+          trust policies instead.
         required: false
         type: string
         default: app
@@ -287,6 +311,20 @@ jobs:
           scope: ${{ inputs.sts-scope != '' && inputs.sts-scope || github.repository_owner }}
           identity: ${{ inputs.sts-tap-identity }}
 
+      # App path: mint a contents:write installation token for the tap from the
+      # GitHub App, only when homebrew is on. Scoped to the tap repo alone; the
+      # App must be installed on it.
+      - name: Mint tap token (GitHub App)
+        id: app-tap-token
+        if: ${{ inputs.token-source == 'app' && !inputs.disable-homebrew }}
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_PLEASE_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_PLEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: homebrew-tap
+          permission-contents: write
+
       # R31: when npm is on, validate required inputs before goreleaser runs so
       # misconfiguration fails fast rather than after a full build.
       - name: Validate npm inputs
@@ -335,7 +373,7 @@ jobs:
       - name: Build (goreleaser)
         env:
           GITHUB_TOKEN: ${{ inputs.token-source == 'octo-sts' && steps.release-token.outputs.token || github.token }}
-          HOMEBREW_GITHUB_TOKEN: ${{ steps.tap-token.outputs.token }}
+          HOMEBREW_GITHUB_TOKEN: ${{ inputs.token-source == 'octo-sts' && steps.tap-token.outputs.token || steps.app-tap-token.outputs.token }}
         run: goreleaser release --clean
 
       # Channel: binstaller. Generate install.sh (attested below, published with
