@@ -30,6 +30,10 @@ jobs:
       # disable-homebrew off to start using the (already-provisioned) release-tap
       # mint + tap policy.
       disable-homebrew: true
+      # relic ships no Nix recipe. Nix defaults ON (it installs Nix and mints the
+      # package-repo token), so opt out explicitly. To start publishing: drop
+      # this and add a goreleaser `nix:` block pointing at <org>/nixpkgs.
+      disable-nix: true
       # relic ships no container image; Docker/ko login defaults ON and fails
       # fast without a DOCKERHUB_USER variable, so opt out explicitly. To start
       # publishing an image: drop this, set DOCKERHUB_USER + DOCKERHUB_TOKEN in

@@ -43,12 +43,13 @@ re-triggers the build) from one of two sources, selected per repo via
     `…:environment:automation`, typically pinned to `refs/heads/main`).
   - `goreleaser-release.yml` (`token-source: octo-sts`) → `release-<repo>` for the
     app-repo write (subject `…:environment:release`, pinned to `v*` tags) and
-    the shared `release-tap` for the Homebrew tap write — so the tap needs **no
-    stored credential**.
+    the shared `release-tap` for the Homebrew tap and nixpkgs writes — so the
+    package repos need **no stored credential**.
 
 `goreleaser-release.yml` on the `app` path uses `github.token` for the release
-and mints the Homebrew tap token from the same GitHub App, scoped to
-`contents:write` on `homebrew-tap` alone. The App secrets must also exist in the
+and mints the package-repo token from the same GitHub App, scoped to
+`contents:write` on the repos of the enabled channels alone (`homebrew-tap`,
+`nixpkgs`). The App secrets must also exist in the
 `release` environment.
 
 ## Environments
@@ -137,13 +138,13 @@ flowchart TB
 | | |
 |---|---|
 | **Trigger** | consumer's `push: tags: ['v*']` caller |
-| **Inputs** | `pre-build`, `disable-binstaller`, `disable-homebrew`, `disable-docker-login` (default `false`), `extra-mise-tools`, `binstaller-spec`, `token-source` (`app`\|`octo-sts`), `sts-scope`, `sts-release-identity`, `sts-tap-identity`, `disable-npm` (default `false` — npm on), `npm-package-name` (required unless npm off), `npm-main-package-dir`. Tool versions (Go, goreleaser, binstaller, optional Bun/cosign) come from the consumer's mise config — no version inputs. |
-| **Secrets** | via `inherit`: `RELEASE_PLEASE_CLIENT_ID`, `RELEASE_PLEASE_APP_PRIVATE_KEY` (App path + homebrew only; mint the tap token); `DOCKERHUB_TOKEN` (Docker/ko login on — the default) |
+| **Inputs** | `pre-build`, `disable-binstaller`, `disable-homebrew`, `disable-nix` (default `false` — nix on), `disable-docker-login` (default `false`), `extra-mise-tools`, `binstaller-spec`, `token-source` (`app`\|`octo-sts`), `sts-scope`, `sts-release-identity`, `sts-tap-identity`, `disable-npm` (default `false` — npm on), `npm-package-name` (required unless npm off), `npm-main-package-dir`. Tool versions (Go, goreleaser, binstaller, optional Bun/cosign) come from the consumer's mise config — no version inputs. |
+| **Secrets** | via `inherit`: `RELEASE_PLEASE_CLIENT_ID`, `RELEASE_PLEASE_APP_PRIVATE_KEY` (App path + homebrew/nix only; mint the package-repo token); `DOCKERHUB_TOKEN` (Docker/ko login on — the default) |
 | **Variables** | `DOCKERHUB_USER` (Docker/ko login on; read from `vars`, no `inherit` needed) — both scoped to the `release` environment |
 | **Job env** | `release` |
 | **Permissions** | `contents: write`, `id-token: write`, `attestations: write` |
 | **Consumer release-please** | `release-please-config.json` must set `"draft": true`, `"force-tag-creation": true` **and** `"include-component-in-tag": false` (the first two are checked by `validate-release-please-config`; the pinned action has no input for either) |
-| **Consumer goreleaser** | `release.draft: true` + `mode: keep-existing` + `use_existing_draft: true` (all three; preflighted); homebrew via `homebrew_casks:` with `skip_upload: auto`; codegen in `before.hooks` |
+| **Consumer goreleaser** | `release.draft: true` + `mode: keep-existing` + `use_existing_draft: true` (all three; preflighted); homebrew via `homebrew_casks:` with `skip_upload: auto`; nix via `nix:` with `skip_upload: auto` and no `main_program`/`formatter`; codegen in `before.hooks` |
 
 ## Quality gate
 

@@ -21,7 +21,7 @@ Answer these before touching any files. Everything downstream keys off them.
 |---|-----------|---------|---------------|
 | 1 | **Toolchain** | `goreleaser-release.yml` | One wrapper for both Go and Bun projects — goreleaser builds either. Declare the toolchain (`go` and/or `bun`) in mise; the wrapper sets it up automatically. |
 | 2 | **Token source** | `app` / `octo-sts` | **`app`** = a GitHub App installation token (App installed + stored `RELEASE_PLEASE_*` secrets). **`octo-sts`** = keyless OIDC, no stored key, trust policies centralised in the owner's `.github`. Choose per repo based on what the owner (org **or** user) has set up — the **chinmina** org uses `app`; another owner may use `octo-sts`. |
-| 3 | **Channels** | GitHub release (always), binstaller (default on), homebrew (default on), Docker/ko login (default on), npm (default on) | Disable a channel by passing `disable-<channel>: true` to `goreleaser-release.yml`. Docker/ko login defaults on and **fails fast** unless the `release` environment defines `DOCKERHUB_USER`; publish no image → pass `disable-docker-login: true`. npm defaults on and **fails fast** unless `npm-package-name` is set and the main package dir exists; publish no npm package → pass `disable-npm: true`. Each enabled channel that needs a credential is a prerequisite (see Step 1). |
+| 3 | **Channels** | GitHub release (always), binstaller (default on), homebrew (default on), nix (default on), Docker/ko login (default on), npm (default on) | Disable a channel by passing `disable-<channel>: true` to `goreleaser-release.yml`. nix defaults on: it installs Nix and mints the package-repo token, so a project that publishes no Nix recipe passes `disable-nix: true`. Docker/ko login defaults on and **fails fast** unless the `release` environment defines `DOCKERHUB_USER`; publish no image → pass `disable-docker-login: true`. npm defaults on and **fails fast** unless `npm-package-name` is set and the main package dir exists; publish no npm package → pass `disable-npm: true`. Each enabled channel that needs a credential is a prerequisite (see Step 1). |
 | 4 | **Repo state** | greenfield / has existing release automation | If the repo already releases via another mechanism, you are **migrating**: the old trigger and the new one must not both run. Disable/delete the old workflow in the same change. |
 
 Record your four answers — later steps say "if `octo-sts` …", "if homebrew on …".
@@ -87,12 +87,12 @@ secrets, so callers omit `secrets:` entirely (and drop the
 |---------------|--------|-------------|
 | `token-source: app` | `RELEASE_PLEASE_CLIENT_ID` | `automation` |
 | `token-source: app` | `RELEASE_PLEASE_APP_PRIVATE_KEY` | `automation` |
-| homebrew on **and** `token-source: app` | `RELEASE_PLEASE_CLIENT_ID` + `RELEASE_PLEASE_APP_PRIVATE_KEY` (same App; mints the tap token) | `release` |
+| homebrew or nix on **and** `token-source: app` | `RELEASE_PLEASE_CLIENT_ID` + `RELEASE_PLEASE_APP_PRIVATE_KEY` (same App; mints the package-repo token) | `release` |
 | Docker/ko login on (default) | `DOCKERHUB_TOKEN` (Docker Hub password/access token) | `release` |
 | npm channel on (default) | *(none — OIDC trusted publishing; no stored token needed)* | — |
 
 `token-source: octo-sts` stores **no** secret — that is the point. On that path
-even the Homebrew tap write is a keyless mint (the `release-tap` identity).
+even the Homebrew tap and nixpkgs writes are a keyless mint (the `release-tap` identity).
 binstaller and the GitHub-release channel never need a secret (keyless OIDC / `github.token`).
 
 **Variables (not secrets).** Docker login also needs the **username**, which is
@@ -113,8 +113,8 @@ there automatically. Omit it while login is on and the run fails fast.
 - [ ] The **octo-sts GitHub App** is installed and authorised on the owner.
 - [ ] The **central trust policies** exist in the **owner's `.github` repo**
       under `.github/chainguard/` (NOT in the consumer repo — see Step 2c):
-      `release-please-<repo>`, `release-<repo>`, and (if homebrew on) the shared
-      `release-tap`. They are added via a reviewed PR to `<OWNER>/.github`.
+      `release-please-<repo>`, `release-<repo>`, and (if homebrew or nix on) the
+      shared `release-tap`. They are added via a reviewed PR to `<OWNER>/.github`.
 - [ ] The owner's `.github` `main` branch is **protected** (required review, no
       bypass for the octo-sts app) — this is what makes centralised policy safe.
 
@@ -252,16 +252,19 @@ post-install steps needed.
       commits are GitHub-signed) — flag it as a *confirm on first run* item, not
       a blocker.
 
-### 1g. App path + homebrew only
+### 1g. App path + homebrew or nix only
 
-The release job mints the tap token from the same GitHub App as
-release-please, scoped to `contents: write` on `homebrew-tap` alone.
+The release job mints the package-repo token from the same GitHub App as
+release-please, scoped to `contents: write` on the repos of the enabled
+channels alone: `homebrew-tap` for homebrew, `nixpkgs` for nix. Each channel
+needs only its own repo.
 
-- [ ] The owner has a `homebrew-tap` repository.
-- [ ] The App behind `RELEASE_PLEASE_CLIENT_ID` is installed on
-      `homebrew-tap` with `contents: write`. On a *selected repositories*
-      installation, add the tap explicitly.
-- [ ] The App is an `always` bypass actor on the tap's branch-protection
+- [ ] The owner has the repo for each enabled channel (`homebrew-tap`,
+      `nixpkgs`).
+- [ ] The App behind `RELEASE_PLEASE_CLIENT_ID` is installed on each of those
+      repos with `contents: write`. On a *selected repositories*
+      installation, add them explicitly.
+- [ ] The App is an `always` bypass actor on each repo's branch-protection
       ruleset. goreleaser pushes unsigned commits straight to the default
       branch, so a PR or signed-commit rule without the bypass rejects them.
 - [ ] Both App secrets exist in the `release` environment, not just
@@ -367,9 +370,10 @@ jobs:
     uses: chinmina/.github/.github/workflows/goreleaser-release.yml@verified-actions # zizmor: ignore[secrets-inherit]
     with:
       token-source: <app|octo-sts>       # must match Step 0.2 / the release-please caller
-      # Channels: omit a line to keep the default (binstaller + homebrew on).
+      # Channels: omit a line to keep the default (binstaller + homebrew + nix on).
       disable-binstaller: <true|false>   # default false
       disable-homebrew: <true|false>     # default false
+      disable-nix: <true|false>          # default false — set true if no Nix recipe
       # npm defaults ON. Provide npm-package-name + a main package dir, or
       # opt out explicitly with disable-npm: true.
       disable-npm: <true|false>          # default false — set true if no npm package
@@ -383,7 +387,7 @@ jobs:
       # extra-mise-tools: cosign         # signing CLIs for goreleaser ko/docker (declare in mise.toml)
       # pre-build: "<shell>"             # only if codegen is NOT in goreleaser before.hooks
     # SECRETS (see 2a for the environment-scoping rationale):
-    #  * Docker/ko login on, OR app + homebrew: keep `secrets: inherit`
+    #  * Docker/ko login on, OR app + homebrew/nix: keep `secrets: inherit`
     #    (DOCKERHUB_TOKEN and the RELEASE_PLEASE_* App secrets are
     #    environment-scoped, so inherit is required).
     #  * otherwise: DELETE the `secrets:` line and the
@@ -428,8 +432,9 @@ permissions:
 repositories: [<REPO>]
 ```
 
-`release-tap.sts.yaml` (only if homebrew on — **shared**, one for all tap
-publishers). This file is very likely to **already exist** from a sibling repo:
+`release-tap.sts.yaml` (only if homebrew or nix on — **shared**, one for all
+package-repo publishers). A repo with nix on needs to be in the alternation
+even when homebrew is off. This file is very likely to **already exist** from a sibling repo:
 **edit it if present** — add this repo to the `claim_pattern.repository`
 alternation — rather than writing a new file. Only create it if no tap policy
 exists yet.
@@ -442,7 +447,7 @@ claim_pattern:
   repository: '^<OWNER>/(<REPO>|<OTHER_TAP_REPOS>)$'
 permissions:
   contents: write
-repositories: [<TAP_REPO>]
+repositories: [homebrew-tap, nixpkgs]
 ```
 
 Override the derived names/scope only if your policies are named differently:
@@ -507,6 +512,80 @@ homebrew_casks:
             system "xattr", "-dr", "com.apple.quarantine", "#{staged_path}/<TOOL>"
           end
 ```
+
+#### Nix — `nix:` *(only if the nix channel is on)*
+
+goreleaser's `nix:` publisher writes a recipe to the owner's `nixpkgs`
+repository. The wrapper installs Nix for `nix-hash` and passes the package-repo
+token as `NIX_GITHUB_TOKEN`:
+
+```yaml
+nix:
+  - name: <TOOL>
+    repository:
+      owner: <OWNER>
+      name: nixpkgs
+      token: "{{ .Env.NIX_GITHUB_TOKEN }}" # set by the wrapper from the minted package-repo token
+    # skip publishing the recipe on a prerelease, as for the cask.
+    skip_upload: auto
+    homepage: "https://github.com/<OWNER>/<REPO>"
+    description: "<DESCRIPTION>"
+    license: "<LICENSE>" # nixpkgs licence attribute, e.g. mit, asl20
+```
+
+Omit `main_program` and `formatter`. `binst` 0.12.0 rejects both when it reads
+the goreleaser config, so `binst init --source goreleaser` fails with them
+present. The other `nix` fields parse, and the generated spec is unchanged.
+
+##### The `nixpkgs` repository
+
+On each non-prerelease tag, goreleaser commits `pkgs/<TOOL>/default.nix` to
+the default branch of `<OWNER>/nixpkgs`. The commit is unsigned and pushed
+directly, so the token's actor (octo-sts, or the App on the `app` path) must be
+an `always` bypass actor on that branch's ruleset.
+
+The recipe is a `callPackage` function over `lib`, `fetchurl`,
+`installShellFiles` and `stdenvNoCC`. It fetches the release archive for the
+current system and checks it against the hash goreleaser computed. Nothing
+references it until the repository exposes it, so commit these once:
+
+- `pkgs/.gitkeep`, so `pkgs/` exists before the first release.
+- `default.nix`, the package set for non-flake users:
+
+  ```nix
+  { pkgs ? import <nixpkgs> { } }:
+  let
+    inherit (pkgs) lib;
+    names = lib.attrNames (lib.filterAttrs (_: t: t == "directory") (builtins.readDir ./pkgs));
+  in
+  lib.genAttrs names (name: pkgs.callPackage ./pkgs/${name} { })
+  ```
+
+- `flake.nix`, plus the `flake.lock` that `nix flake lock` generates:
+
+  ```nix
+  {
+    description = "Nix packages published by <OWNER>";
+    inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    outputs = { self, nixpkgs }:
+      let
+        systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
+        forAllSystems = f: nixpkgs.lib.genAttrs systems (s: f nixpkgs.legacyPackages.${s});
+      in {
+        packages = forAllSystems (pkgs: import ./default.nix { inherit pkgs; });
+        overlays.default = final: _: import ./default.nix { pkgs = final; };
+      };
+  }
+  ```
+
+Both files discover every directory under `pkgs/`, so a new tool needs no edit
+to the repository. The `nixpkgs` input only supplies the build helpers the
+recipes use; nothing is published to nixpkgs itself. Nothing runs at publish
+time either: Nix evaluates the flake when a user installs from it.
+
+The recipe commit lands during the build, before attestation and before the
+wrapper publishes the release. Its URLs return 404 until *Publish release*
+runs, the same as the cask.
 
 #### Docker / ko + cosign — *(only if publishing a container image)*
 
@@ -700,8 +779,8 @@ Use the **[`kms-import` README][kms-readme]** as the worked exemplar — copy it
 - **One collapsible `<details>` block per enabled channel**, each opened by a
   bold `<summary>`, under a single `## Installation` heading. Include only the
   channels you actually ship (Step 0.3): **mise** and **manual download** always;
-  **install script** only if binstaller is on; **Homebrew** only if that channel
-  is on; **go install** for a Go module. Mark the recommended one in its summary
+  **install script** only if binstaller is on; **Homebrew** and **Nix** only if
+  that channel is on; **go install** for a Go module. Mark the recommended one in its summary
   (e.g. `mise (recommended)`).
 - **A `## Verifying releases` section** that names the attestation (SLSA
   build-provenance via Sigstore keyless signing — no long-lived key) and gives
@@ -771,6 +850,16 @@ sh install.sh
 
 ```sh
 brew install <OWNER>/tap/<TOOL>
+```
+
+</details>
+
+<!-- Nix — ONLY if the nix channel is on. -->
+<details>
+<summary><strong>Nix</strong></summary>
+
+```sh
+nix profile install github:<OWNER>/nixpkgs#<TOOL>
 ```
 
 </details>
@@ -944,6 +1033,9 @@ assumption; run them via the pinned invocations below.
   re-add `repo`/`default_version`/`binaries` to the generated spec and trim it
   to unix targets (`install.sh` is POSIX-only). The committed config keeps the
   cask block — this workaround is local-generation only.
+- **binstaller vs `nix`** *(if both on)*: `binst` 0.12.0 also rejects
+  `nix[].main_program` and `nix[].formatter`. Omit both from the committed
+  config (2d).
 
 ---
 
@@ -964,8 +1056,11 @@ assumption; run them via the pinned invocations below.
 | Homebrew cask published on a prerelease/RC tag | cask block missing `skip_upload: auto` | add `skip_upload: auto` to the `homebrew_casks:` entry (2d) |
 | `setup-release-toolchain` fails: tool not declared | required tool missing from `mise.toml` | declare `go`/`goreleaser` (and `binstaller` when on — it needs `[tool_alias]` + `rename_exe`) in `mise.toml` (1e) |
 | Publish gate silently absent | `automation`/`release` auto-created ungated | create them with protection rules *before* first run (1a) |
-| *Mint tap token (GitHub App)* fails | App not installed on `homebrew-tap`, the tap repo doesn't exist, or the App secrets are missing from the `release` environment | install the App on the tap, create the repo, or add both secrets to `release` and keep `secrets: inherit` (1b/1g/2b) |
-| homebrew push to the tap rejected (`app` path) | the App is not an `always` bypass actor on the tap's ruleset | add the bypass (1g) |
+| *Mint package-repo token (GitHub App)* fails | App not installed on `homebrew-tap`/`nixpkgs`, the repo doesn't exist, or the App secrets are missing from the `release` environment | install the App on the repo, create it, or add both secrets to `release` and keep `secrets: inherit` (1b/1g/2b); `disable-nix: true` if no Nix recipe |
+| *Mint package-repo token (octo-sts)* fails with homebrew off | nix is on by default and the repo is not in the `release-tap` alternation | add the repo to `release-tap` (2c), or `disable-nix: true` |
+| cask or recipe push rejected (`app` path) | the App is not an `always` bypass actor on that repo's ruleset | add the bypass (1g) |
+| goreleaser nix pipe fails: `nix-hash` not found | nix disabled in the wrapper but a `nix:` block is present | drop `disable-nix: true`, or remove the `nix:` block (2d) |
+| `binst init` fails: `field main_program not found in type config.Nix` | `main_program` or `formatter` in the `nix:` block | remove both (2d) |
 | `release.yml` fails at *Validate docker login inputs* | Docker login on (default) but `DOCKERHUB_USER` unset in the `release` environment | set `DOCKERHUB_USER` (variable) + `DOCKERHUB_TOKEN` (secret) in `release`, or `disable-docker-login: true` (1b/2b) |
 | image push fails / lands on `ttl.sh` instead of Docker Hub | `KO_DOCKER_REPO` not set for CI in your goreleaser config | set `KO_DOCKER_REPO` keyed off `CI` in goreleaser/`mise.toml [env]` — the wrapper never sets it (2d) |
 | npm publish fails: "401 Unauthorized" or OIDC rejection | trusted publisher not configured on npmjs.com, wrong workflow filename, wrong environment name, or wrong repo | configure trusted publisher per package with `release.yml` (caller) + `release` env (2e) |
@@ -982,7 +1077,7 @@ assumption; run them via the pinned invocations below.
 `sts-scope` (default owner).
 
 `goreleaser-release.yml`: `pre-build`, `disable-binstaller`, `disable-homebrew`,
-`disable-docker-login` (default `false`), `extra-mise-tools` (e.g. `cosign`),
+`disable-nix` (default `false`), `disable-docker-login` (default `false`), `extra-mise-tools` (e.g. `cosign`),
 `disable-npm` (default `false`), `npm-package-name` (required unless npm off),
 `npm-main-package-dir` (default `.github/workflows/npm/main`),
 `binstaller-spec`, `token-source` (`app`\|`octo-sts`), `sts-scope` (default owner),
