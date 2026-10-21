@@ -12,7 +12,12 @@ Publishing uses npm trusted publishing. The release job's OIDC token authenticat
 
 | Placeholder | Meaning | Example |
 | ----------- | ------- | ------- |
+| `<OWNER>` | GitHub organisation or user that owns the repository | `chinmina` |
+| `<REPO>` | Repository name | `shed` |
+| `<TOOL>` | goreleaser `project_name` | `shed` |
+| `<DESCRIPTION>` | One-line description of the tool | `Fictional CLI used as the worked example…` |
 | `<NPM_PACKAGE>` | npm name of the main package | `@chinmina/shed` |
+| `<COMMAND>` | Command name, when it differs from the unscoped package name | `shed` |
 
 Platform packages are named `<NPM_PACKAGE>-<os>-<cpu>`, for example `@chinmina/shed-linux-x64` and `@chinmina/shed-windows-arm64`.
 
@@ -72,31 +77,61 @@ In `.github/workflows/release.yml`, delete `disable-npm: true` and set the packa
 
 ## 4. Register trusted publishers
 
-npm checks trusted publishing per package. Register the main package and every platform package.
+npm checks trusted publishing per package, so register the main package and every platform package. A new trusted publisher expires unless it completes a successful publish within 2 days, and an expired one cannot be edited. Do this step only when a Release PR is ready to merge.
 
-1. List the platform packages the release will publish. Each archive goreleaser builds becomes one package.
+1. Confirm a Release PR is open.
+
+   ```sh
+   gh pr list --repo "<OWNER>/<REPO>" --label "autorelease: pending"
+   ```
+
+   The output lists one pull request. If it is empty, merge a `feat:` or `fix:` change first, and wait for the Release PR.
+
+2. Write the package names to `npm-packages.txt`. Each archive goreleaser builds becomes one platform package.
 
    ```sh
    mise exec -- goreleaser release --snapshot --clean --skip=nix,homebrew
-   jq -r '.[] | select(.type == "Archive")
-     | "<NPM_PACKAGE>-\(.goos)-\({"amd64": "x64", "arm64": "arm64", "386": "ia32", "arm": "arm"}[.goarch])"' \
-     dist/artifacts.json
+   {
+     echo "<NPM_PACKAGE>"
+     jq -r '.[] | select(.type == "Archive")
+       | "<NPM_PACKAGE>-\(.goos)-\({"amd64": "x64", "arm64": "arm64", "386": "ia32", "arm": "arm"}[.goarch])"' \
+       dist/artifacts.json
+   } > npm-packages.txt
+   cat npm-packages.txt
    ```
 
-   Names use goreleaser's OS (`linux`, `darwin`, `windows`) and npm's CPU (`x64`, `arm64`).
+   The output lists the main package and one package per archive. Names use goreleaser's OS (`linux`, `darwin`, `windows`) and npm's CPU (`x64`, `arm64`).
 
-2. Make sure each package exists on the registry. npm only accepts a trusted publisher for an existing package, so publish a placeholder version by hand for any new name.
-
-3. Register the trusted publisher for each package with npm 11.15.0 or later. Your npm account needs write access to the packages and two-factor authentication.
+3. Publish a placeholder for each package that does not exist yet. npm only accepts a trusted publisher for an existing package. Your npm account needs write access to the scope and two-factor authentication.
 
    ```sh
-   for pkg in "<NPM_PACKAGE>" "<NPM_PACKAGE>-linux-x64" "<NPM_PACKAGE>-windows-x64"; do
-     npm trust github "${pkg}" --file release.yml --repo "<OWNER>/<REPO>" \
-       --env release --allow-publish --yes
-   done
+   while read -r pkg; do
+     npm view "${pkg}" name >/dev/null 2>&1 && continue
+     dir="$(mktemp -d)"
+     printf '{"name":"%s","version":"0.0.0","description":"Placeholder for trusted publishing setup"}\n' \
+       "${pkg}" > "${dir}/package.json"
+     npm publish --access public "${dir}"
+   done < npm-packages.txt
    ```
 
-   List every package from the previous step in the loop. `--allow-publish` is required: the kit publishes with `npm publish`, and trusted publishers created since September 2026 allow only `npm stage publish` by default.
+   Then confirm every package exists:
+
+   ```sh
+   while read -r pkg; do npm view "${pkg}" name; done < npm-packages.txt
+   ```
+
+   The output repeats every name in `npm-packages.txt`.
+
+4. Register the trusted publisher for each package, with npm 11.15.0 or later.
+
+   ```sh
+   while read -r pkg; do
+     npm trust github "${pkg}" --file release.yml --repo "<OWNER>/<REPO>" \
+       --env release --allow-publish --yes
+   done < npm-packages.txt
+   ```
+
+   `--allow-publish` is required: the kit publishes with `npm publish`, and trusted publishers created since September 2026 allow only `npm stage publish` by default.
 
    The same settings are available on [npmjs.com](https://www.npmjs.com/) under the package's **Settings → Trusted publishing**:
 
@@ -108,27 +143,39 @@ npm checks trusted publishing per package. Register the main package and every p
    | Environment name | `release` |
    | Allowed actions | `npm publish` |
 
-4. Confirm a package's configuration.
+5. Confirm each package has one trusted publisher.
 
    ```sh
-   npm trust list "<NPM_PACKAGE>"
+   while read -r pkg; do echo "== ${pkg}"; npm trust list "${pkg}"; done < npm-packages.txt
    ```
 
-## 5. Check the next release
+   Each package lists one GitHub Actions publisher for `<OWNER>/<REPO>`, workflow `release.yml`, and environment `release`.
 
-After the next release, confirm the main package resolves to the new version:
+## 5. Release within 2 days
 
-```sh
-npm view "<NPM_PACKAGE>" version
-npx -y "<NPM_PACKAGE>" --help
-```
+1. Merge the Release PR, and wait for the `release` run on the new tag to finish.
+
+   ```sh
+   gh run list --repo "<OWNER>/<REPO>" --workflow release.yml --limit 1
+   ```
+
+   The latest run shows `completed` and `success`.
+
+2. Confirm the main package resolves to the new version.
+
+   ```sh
+   npm view "<NPM_PACKAGE>" version
+   npx -y "<NPM_PACKAGE>" --help
+   ```
+
+   `npm view` prints the release version without the leading `v`, and the tool prints its help.
 
 ## Failure modes
 
 | Symptom | Cause | Fix |
 | ------- | ----- | --- |
 | *Validate npm inputs* fails | `npm-package-name` is empty, the main package directory or its `package.json` is missing, or `node` is not in `mise.toml` | Complete steps 1 to 3. |
-| Publish fails with 401 or an OIDC error | The trusted publisher does not match `release.yml`, the `release` environment, and `<OWNER>/<REPO>`, or does not allow `npm publish` | Replace the failing package's trusted publisher. Register the caller (`release.yml`), not `goreleaser-release.yml`, and allow `npm publish`. |
+| Publish fails with 401 or an OIDC error | The trusted publisher does not match `release.yml`, the `release` environment, and `<OWNER>/<REPO>`, does not allow `npm publish`, or expired because no publish succeeded within 2 days of creating it | Revoke the failing package's publisher (`npm trust revoke`), then repeat [step 4](#4-register-trusted-publishers) and release within 2 days. Register the caller (`release.yml`), not `goreleaser-release.yml`. |
 | Preflight fails: no archives found | goreleaser produced no archives in `dist/artifacts.json` | Fix the goreleaser `archives` configuration. |
 | Preflight fails: unknown `goos` or `goarch` | goreleaser builds a platform with no Node equivalent | Remove the target from the goreleaser build. |
 
