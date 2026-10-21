@@ -17,6 +17,65 @@
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: extractVersion=(?<extractVersion>\\S+))?\\n[A-Z_]+=(?<currentValue>\\S+)",
       ],
     },
+    {
+      customType: "regex",
+      description: "Go version in the docs' mise.toml examples.",
+      managerFilePatterns: ["/^docs/.+\\.md$/"],
+      matchStrings: ['\\n\\s*go = "(?<currentValue>\\d+\\.\\d+\\.\\d+)"'],
+      depNameTemplate: "go",
+      datasourceTemplate: "golang-version",
+    },
+    {
+      customType: "regex",
+      description: "goreleaser version in the docs' mise.toml examples.",
+      managerFilePatterns: ["/^docs/.+\\.md$/"],
+      matchStrings: ['\\n\\s*goreleaser = "(?<currentValue>\\d+\\.\\d+\\.\\d+)"'],
+      depNameTemplate: "goreleaser",
+      packageNameTemplate: "goreleaser/goreleaser",
+      datasourceTemplate: "github-releases",
+      extractVersionTemplate: "^v(?<version>.+)$",
+    },
+    {
+      customType: "regex",
+      description: "cosign version in the docs' mise.toml examples.",
+      managerFilePatterns: ["/^docs/.+\\.md$/"],
+      matchStrings: ['\\n\\s*cosign = "(?<currentValue>\\d+\\.\\d+\\.\\d+)"'],
+      depNameTemplate: "cosign",
+      packageNameTemplate: "sigstore/cosign",
+      datasourceTemplate: "github-releases",
+      extractVersionTemplate: "^v(?<version>.+)$",
+    },
+    {
+      customType: "regex",
+      // shed's mise.toml is listed too: the mise manager cannot resolve the
+      // [tool_alias] binstaller entry, and reports it as unsupported.
+      description: "binstaller version in the docs' [tools.binstaller] examples and shed's mise.toml.",
+      managerFilePatterns: ["/^docs/.+\\.md$/", "/^docs/reference/shed/mise\\.toml$/"],
+      matchStrings: ['\\[tools\\.binstaller\\]\\s+version = "(?<currentValue>\\d+\\.\\d+\\.\\d+)"'],
+      depNameTemplate: "binstaller",
+      packageNameTemplate: "binary-install/binstaller",
+      datasourceTemplate: "github-releases",
+      extractVersionTemplate: "^v(?<version>.+)$",
+    },
+    {
+      customType: "regex",
+      description: "actionlint version in the guide's one-off lint check.",
+      managerFilePatterns: ["/^docs/.+\\.md$/"],
+      matchStrings: ["actionlint@(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      depNameTemplate: "actionlint",
+      packageNameTemplate: "rhysd/actionlint",
+      datasourceTemplate: "github-releases",
+      extractVersionTemplate: "^v(?<version>.+)$",
+    },
+    {
+      customType: "regex",
+      // PyPI, because the GitHub repository also tags yamlpath releases.
+      description: "zizmor version in the guide's one-off lint check.",
+      managerFilePatterns: ["/^docs/.+\\.md$/"],
+      matchStrings: ["zizmor@(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      depNameTemplate: "zizmor",
+      datasourceTemplate: "pypi",
+    },
   ],
   // Local rules only, ordered broad -> narrow: last match wins per-option.
   packageRules: [
@@ -24,6 +83,19 @@
       description: "Update validate-release-please-config's pinned validator in the GitHub Actions group.",
       matchFileNames: [".github/actions/validate-release-please-config/versions.env"],
       groupName: "GitHub Actions",
+    },
+    {
+      description: "Bump the docs' pinned versions and the shed example in one PR, so they never disagree.",
+      matchFileNames: ["docs/**"],
+      groupName: "Documentation versions",
+    },
+    {
+      description: "binstaller behaviour claims in the docs name a specific version.",
+      matchFileNames: ["docs/**"],
+      matchDepNames: ["binstaller"],
+      prBodyNotes: [
+        "Re-check the `binst` version-specific claims in `docs/` before merging: the rejected goreleaser keys may have changed.",
+      ],
     },
   ],
 }
