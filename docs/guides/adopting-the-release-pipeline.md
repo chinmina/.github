@@ -291,6 +291,9 @@ homebrew_casks:
       owner: <OWNER>
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_GITHUB_TOKEN }}" # set by the release workflow
+    # Leave the committer unset, so GitHub signs the commit as the token's App.
+    commit_author:
+      use_github_app_token: true
     skip_upload: auto # no cask for prerelease tags
     homepage: "https://github.com/<OWNER>/<REPO>"
     description: "<DESCRIPTION>"
@@ -310,6 +313,9 @@ nix:
       owner: <OWNER>
       name: nixpkgs
       token: "{{ .Env.NIX_GITHUB_TOKEN }}" # set by the release workflow
+    # Leave the committer unset, so GitHub signs the commit as the token's App.
+    commit_author:
+      use_github_app_token: true
     skip_upload: auto # no recipe for prerelease tags
     homepage: "https://github.com/<OWNER>/<REPO>"
     description: "<DESCRIPTION>"

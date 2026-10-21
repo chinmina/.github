@@ -86,6 +86,7 @@ Required when Homebrew is on.
 | --- | ----- |
 | `homebrew_casks[].repository` | `owner: <OWNER>`, `name: homebrew-tap`, `token: "{{ .Env.HOMEBREW_GITHUB_TOKEN }}"` |
 | `homebrew_casks[].skip_upload` | `auto`, so prerelease tags do not publish the cask |
+| `homebrew_casks[].commit_author.use_github_app_token` | `true`, so GitHub signs the tap commit. See [Package repositories](#package-repositories) |
 | `homebrew_casks[].custom_block` | The `postflight_steps` block that clears the macOS quarantine attribute |
 
 The quarantine block, with `<TOOL>` as the binary name:
@@ -109,6 +110,7 @@ Required when Nix is on.
 | --- | ----- |
 | `nix[].repository` | `owner: <OWNER>`, `name: nixpkgs`, `token: "{{ .Env.NIX_GITHUB_TOKEN }}"` |
 | `nix[].skip_upload` | `auto`, so prerelease tags do not publish the recipe |
+| `nix[].commit_author.use_github_app_token` | `true`, so GitHub signs the recipe commit |
 | `nix[].homepage`, `nix[].description` | Project metadata |
 | `nix[].license` | A nixpkgs licence attribute, for example `mit` or `asl20` |
 
@@ -175,6 +177,6 @@ Regenerate the spec when archive names or platforms change in the goreleaser con
 | `<OWNER>/homebrew-tap` | Homebrew | `Casks/<TOOL>.rb`, one per tool |
 | `<OWNER>/nixpkgs` | Nix | `pkgs/<TOOL>/default.nix`, plus a `default.nix` and `flake.nix` that expose every package |
 
-goreleaser pushes unsigned commits to each default branch. The token's actor must be an `always` bypass actor on any ruleset protecting that branch: the release GitHub App, or the octo-sts App on the `octo-sts` token source. [Setting up package repositories](../guides/setting-up-package-repositories.md) creates both repositories.
+goreleaser commits directly to each default branch through the GitHub API. With `commit_author.use_github_app_token: true` on each publisher, the commit carries no author or committer, so GitHub signs it as the App that minted the token, which satisfies a signed-commit rule. A ruleset that requires pull requests, or any rule other than signatures, still needs that App as an `always` bypass actor: the release GitHub App, or the octo-sts App on the `octo-sts` token source. [Setting up package repositories](../guides/setting-up-package-repositories.md) creates both repositories.
 
 [goreleaser-6873]: https://github.com/goreleaser/goreleaser/pull/6873

@@ -46,7 +46,8 @@ Symptoms, causes, and fixes for the shared release pipeline, grouped by the stag
 | ------- | ----- | --- |
 | A second release appears next to the draft | goreleaser created its own release | Set `release.use_existing_draft: true` with `release.draft: true` and `release.mode: keep-existing`. |
 | The cask or recipe is published for a prerelease tag | `skip_upload: auto` is missing | Add `skip_upload: auto` to the `homebrew_casks:` and `nix:` entries. |
-| The cask or recipe push is rejected | The token's actor is not an `always` bypass actor on the package repository's ruleset | Add the release GitHub App, or the octo-sts App, as a bypass actor. |
+| The cask or recipe push is rejected for missing signatures | The publisher does not set `commit_author.use_github_app_token: true`, so goreleaser sets a committer and GitHub does not sign the commit | Add the key to `homebrew_casks[]` and `nix[]`. |
+| The cask or recipe push is rejected for another rule, such as required pull requests | The token's actor is not an `always` bypass actor on the package repository's ruleset | Add the release GitHub App, or the octo-sts App, as a bypass actor. |
 | `brew install` prints deprecation warnings for `postflight` or `verified` | The cask uses `hooks.post.install` or `url.verified` | Replace them with the `postflight_steps` `custom_block`. See [Homebrew cask](repository-configuration.md#homebrew-cask). |
 | goreleaser fails: `function "staged_path" not defined` | `{{staged_path}}` in `custom_block` is not escaped, so goreleaser treats it as a template function | Write it as `{{ "{{staged_path}}" }}`. |
 | The cask or recipe URL returns 404 | The release is still a draft | Expected until the *Publish release* step runs. |

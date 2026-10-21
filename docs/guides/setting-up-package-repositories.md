@@ -23,7 +23,7 @@ The tap must be named `homebrew-tap`, so users can run `brew install <OWNER>/tap
 
 2. Give the App that mints tokens access to the repository: the release App, or the octo-sts App on the `octo-sts` token source. Under the owner's **Settings → GitHub Apps → (App) → Configure**, add `homebrew-tap` to the selected repositories.
 
-3. If a ruleset protects the default branch, add the App as a bypass actor. goreleaser pushes unsigned commits directly to the default branch, so a pull request or signed-commit rule rejects them otherwise. Follow [Ruleset bypass](#ruleset-bypass) with `<PACKAGE_REPO>` set to `homebrew-tap`.
+3. If a ruleset on the default branch requires pull requests, or enforces any rule other than signed commits, add the App as a bypass actor. goreleaser commits directly to the default branch. Its commits are signed by GitHub when the goreleaser config sets `commit_author.use_github_app_token: true`, so a signed-commit rule alone needs no bypass. Follow [Ruleset bypass](#ruleset-bypass) with `<PACKAGE_REPO>` set to `homebrew-tap`.
 
 ## Nix package repository
 
@@ -122,13 +122,13 @@ goreleaser writes each recipe to `pkgs/<TOOL>/default.nix`. Two files at the rep
 
 7. Give the release App access to the repository, as for the tap.
 
-8. If a ruleset protects the default branch, follow [Ruleset bypass](#ruleset-bypass) with `<PACKAGE_REPO>` set to `nixpkgs`.
+8. If a ruleset on the default branch requires pull requests, or enforces any rule other than signed commits, follow [Ruleset bypass](#ruleset-bypass) with `<PACKAGE_REPO>` set to `nixpkgs`.
 
 [jamestelfer/nixpkgs](https://github.com/jamestelfer/nixpkgs) is a working instance of this layout.
 
 ## Ruleset bypass
 
-Run these commands for each ruleset that protects the package repository's default branch.
+Run these commands for each ruleset on the package repository's default branch that enforces more than signed commits.
 
 1. List the rulesets.
 

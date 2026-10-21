@@ -52,6 +52,9 @@ homebrew_casks:
       owner: chinmina
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_GITHUB_TOKEN }}" # set by the release workflow
+    # Leave the committer unset, so GitHub signs the commit as the token's App.
+    commit_author:
+      use_github_app_token: true
     # prerelease: auto marks the release only. This stops the cask being
     # pushed for a prerelease tag.
     skip_upload: auto
@@ -75,6 +78,9 @@ nix:
       owner: chinmina
       name: nixpkgs
       token: "{{ .Env.NIX_GITHUB_TOKEN }}" # set by the release workflow
+    # Leave the committer unset, so GitHub signs the commit as the token's App.
+    commit_author:
+      use_github_app_token: true
     skip_upload: auto # no recipe for prerelease tags
     homepage: "https://github.com/chinmina/shed"
     description: "Fictional CLI used as the worked example for the chinmina release pipeline"
