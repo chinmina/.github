@@ -149,7 +149,7 @@ release-please creates the `v*` tag with the minted token. A ruleset that restri
    gh api "repos/<OWNER>/<REPO>/rulesets" --jq '.[] | [.id, .target, .name] | @tsv'
    ```
 
-   If no ruleset has target `tag`, skip to [step 5](#5-declare-the-toolchain).
+   If no ruleset has target `tag`, skip to [step 5](#5-make-releases-immutable).
 
 2. Save the tag ruleset that restricts creation. `<RULESET_ID>` is its ID from the list.
 
@@ -177,7 +177,27 @@ release-please creates the `v*` tag with the minted token. A ruleset that restri
 
 The bypass must be on the ruleset that imposes the restriction. Rulesets only add restrictions, so a second ruleset cannot grant an exception.
 
-## 5. Declare the toolchain
+## 5. Make releases immutable
+
+An immutable release cannot have its assets changed or its tag moved once it is published. The pipeline publishes only after every asset is uploaded and attested, so nothing needs to change afterwards. A draft stays editable, so a failed run can still be re-run. Immutability applies only to releases published after it is enabled.
+
+1. Enable immutable releases for the repository.
+
+   ```sh
+   gh api --method PUT "repos/<OWNER>/<REPO>/immutable-releases"
+   ```
+
+   To cover every repository of an organisation, set the policy under the organisation's **Settings → Repository → General → Releases** instead.
+
+2. Confirm the setting.
+
+   ```sh
+   gh api "repos/<OWNER>/<REPO>/immutable-releases"
+   ```
+
+   The output shows `"enabled":true`. `"enforced_by_owner":true` means the organisation policy applies.
+
+## 6. Declare the toolchain
 
 mise is the version authority for the tools the repository and the release job use. Create or extend `mise.toml` at the repository root:
 
@@ -207,7 +227,7 @@ mise exec -- binst --version
 
 [mise.toml](../reference/repository-configuration.md#misetoml) lists the tools each channel needs.
 
-## 6. Configure release-please
+## 7. Configure release-please
 
 1. Create `release-please-config.json`:
 
@@ -240,7 +260,7 @@ mise exec -- binst --version
 
    For a repository with earlier releases, set the latest released version instead and remove `initial-version`.
 
-## 7. Configure goreleaser
+## 8. Configure goreleaser
 
 Create or update `.goreleaser.yaml`. The `release` block is required. The `homebrew_casks` and `nix` blocks publish the two package channels.
 
@@ -335,7 +355,7 @@ Adjust `main` and `ldflags` to where your entry point and version variable live.
 
 Write `{{staged_path}}` exactly as `{{ "{{staged_path}}" }}`. goreleaser renders the configuration as a template, and the escape produces the literal `{{staged_path}}` that Homebrew expects.
 
-## 8. Generate the binstaller spec
+## 9. Generate the binstaller spec
 
 1. Generate `.config/binstaller.yml` from the goreleaser config.
 
@@ -354,7 +374,7 @@ Write `{{staged_path}}` exactly as `{{ "{{staged_path}}" }}`. goreleaser renders
 
 Regenerate the spec whenever archive names or platforms change in `.goreleaser.yaml`.
 
-## 9. Add the caller workflows
+## 10. Add the caller workflows
 
 Each caller sets `permissions: {}` for the workflow and grants permissions on the calling job only. A reusable workflow can only reduce the permissions it receives, so the calling job grants at least what the reusable job declares.
 
@@ -442,7 +462,7 @@ Each caller sets `permissions: {}` for the workflow and grants permissions on th
 
 [Reusable workflows](../reference/reusable-workflows.md) lists every input.
 
-## 10. Document installation
+## 11. Document installation
 
 Add an `## Installation` and a `## Verifying releases` section to the repository's `README.md`. Include one collapsible block for each channel the tool ships, and no others. The [kms-import README][kms-readme] is a complete example.
 
@@ -564,9 +584,18 @@ not by a workflow in this repository.
 
 `checksums.txt` lists every archive. After downloading it alongside an archive, check with
 `sha256sum --check --ignore-missing checksums.txt`, or `shasum -a 256 --check --ignore-missing checksums.txt` on macOS.
+
+Releases are immutable: once published, their assets cannot be changed and
+their tag cannot be moved. GitHub records a release attestation of the tag,
+commit, and every asset. Check a downloaded file against it with GitHub CLI
+2.81.0 or later:
+
+```sh
+gh release verify-asset v1.2.3 <TOOL>_linux_amd64.tar.gz --repo <OWNER>/<REPO>
+```
 ````
 
-## 11. Check before the first release
+## 12. Check before the first release
 
 Run these checks from the repository root before you push.
 
@@ -594,7 +623,7 @@ Run these checks from the repository root before you push.
 
    The output contains `postflight_steps` and `{{staged_path}}/<TOOL>`, and no `verified:` or `postflight do` lines.
 
-## 12. Run the first release
+## 13. Run the first release
 
 1. Merge the pull request that adds the files above, with a Conventional Commit title such as `feat: publish releases`.
 
@@ -609,11 +638,11 @@ Run these checks from the repository root before you push.
 4. Wait for the `release` run on the tag to finish, then confirm the release is published with its assets.
 
    ```sh
-   gh release view v0.1.0 --repo "<OWNER>/<REPO>" --json isDraft,assets \
-     --jq '"draft: \(.isDraft)", (.assets[].name)'
+   gh release view v0.1.0 --repo "<OWNER>/<REPO>" --json isDraft,isImmutable,assets \
+     --jq '"draft: \(.isDraft)", "immutable: \(.isImmutable)", (.assets[].name)'
    ```
 
-   The output shows `draft: false`, the archives, `checksums.txt`, and `install.sh`.
+   The output shows `draft: false`, `immutable: true`, the archives, `checksums.txt`, and `install.sh`.
 
 5. Verify an artifact's provenance.
 
@@ -625,7 +654,15 @@ Run these checks from the repository root before you push.
 
    The command prints `✓ Verification succeeded!` and exits 0. `--signer-workflow` is required: the shared workflow in `chinmina/.github` signs the attestation, so `--repo` alone fails.
 
-6. Install from each package channel.
+6. Verify the release attestation GitHub created when the release was published.
+
+   ```sh
+   gh release verify-asset v0.1.0 <TOOL>_linux_amd64.tar.gz --repo "<OWNER>/<REPO>"
+   ```
+
+   The command prints `✓ Verification succeeded!` and names the file as present in `v0.1.0`.
+
+7. Install from each package channel.
 
    ```sh
    brew install <OWNER>/tap/<TOOL>
