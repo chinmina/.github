@@ -45,21 +45,24 @@ flowchart LR
         direction TB
         brew["homebrew-tap"]:::external
         nix["nixpkgs"]:::external
-        npm["npm"]:::optional
         docker["container registry"]:::optional
+        npm["npm"]:::optional
     end
 
     commits --> pr
     draft -- "tag push" --> build
     publish --> gh["GitHub Release<br/>+ install.sh"]:::external
-    build --> ch
+    build --> brew
+    build --> nix
+    build -.-> docker
+    attest -.-> npm
 
     style rp fill:none,stroke:#1d4ed8,stroke-dasharray:6 4
     style gr fill:none,stroke:#1d4ed8,stroke-dasharray:6 4
     style ch fill:none,stroke:#7e22ce,stroke-dasharray:6 4
 ```
 
-Grey dashed channels are the ones a typical CLI tool disables. The Homebrew cask and Nix recipe are committed during the build, but their URLs point at release assets that return 404 until the release is published.
+Grey dashed channels are the ones a typical CLI tool disables. goreleaser publishes the cask, recipe, and image during the build. npm packages are published after attestation, before the release. The Homebrew cask and Nix recipe are committed during the build, but their URLs point at release assets that return 404 until the release is published.
 
 ## Release sequence
 
