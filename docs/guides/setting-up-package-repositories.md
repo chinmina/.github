@@ -76,7 +76,8 @@ goreleaser writes each recipe to `pkgs/<TOOL>/default.nix`. Two files at the rep
        let
          inherit (nixpkgs) lib;
          # Every platform goreleaser's nix publisher can emit. nixpkgs 26.05 is
-         # the last release supporting x86_64-darwin.
+         # the last release supporting x86_64-darwin: moving to 26.11 means
+         # deleting "x86_64-darwin" below, or evaluation fails.
          systems = [
            "x86_64-linux"
            "aarch64-linux"
