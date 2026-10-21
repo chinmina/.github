@@ -1,0 +1,77 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+builds:
+  - id: release
+    binary: shed
+    main: ./cmd/shed
+    flags:
+      - "-trimpath"
+    ldflags: "-w -X github.com/chinmina/shed/internal/buildinfo.Version={{.Version}}"
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+# The release workflow attests every file listed here. Keep the name stable:
+# the workflow reads dist/checksums.txt.
+checksum:
+  name_template: "checksums.txt"
+
+# Archive names must match the asset template in .config/binstaller.yml.
+archives:
+  - id: archives
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+# Release notes come from release-please. mode: keep-existing below leaves
+# them in place, so goreleaser's changelog is not used.
+
+release:
+  draft: true # the release workflow publishes it after attestation
+  use_existing_draft: true # find and fill the release-please draft
+  mode: keep-existing # keep the release-please title and notes
+  prerelease: auto # mark v1.2.3-rc.1 style tags as prereleases
+
+homebrew_casks:
+  - name: shed
+    repository:
+      owner: chinmina
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_GITHUB_TOKEN }}" # set by the release workflow
+    # prerelease: auto marks the release only. This stops the cask being
+    # pushed for a prerelease tag.
+    skip_upload: auto
+    homepage: "https://github.com/chinmina/shed"
+    description: "Fictional CLI used as the worked example for the chinmina release pipeline"
+    # Clear the macOS quarantine attribute so the binary runs without a
+    # Gatekeeper prompt. hooks.post.install would emit the deprecated
+    # `postflight` stanza, so custom_block carries `postflight_steps` until
+    # goreleaser supports it (goreleaser/goreleaser#6873).
+    # `{{ "{{staged_path}}" }}` renders as Homebrew's `{{staged_path}}` token.
+    custom_block: |
+      postflight_steps do
+        on_macos do
+          run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ "{{staged_path}}" }}/shed"]
+        end
+      end
+
+nix:
+  - name: shed
+    repository:
+      owner: chinmina
+      name: nixpkgs
+      token: "{{ .Env.NIX_GITHUB_TOKEN }}" # set by the release workflow
+    skip_upload: auto # no recipe for prerelease tags
+    homepage: "https://github.com/chinmina/shed"
+    description: "Fictional CLI used as the worked example for the chinmina release pipeline"
+    license: "asl20"
+    # No main_program or formatter: binst 0.12.0 rejects both.
