@@ -9,8 +9,13 @@ This guide adds a container image to a repository that already uses the shared r
 
 | Placeholder | Meaning | Example |
 | ----------- | ------- | ------- |
+| `<OWNER>` | GitHub organisation or user that owns the repository | `chinmina` |
+| `<REPO>` | Repository name | `shed` |
+| `<TOOL>` | goreleaser `project_name` | `shed` |
 | `<IMAGE>` | Docker Hub image repository | `chinmina/shed` |
 | `<DOCKERHUB_USER>` | Docker Hub username for the access token | `chinminabot` |
+| `<TOKEN_FILE>` | Path to a file holding the Docker Hub access token | |
+| `<VERSION>` | Release version, without the leading `v` | `1.2.3` |
 
 ## 1. Store the Docker Hub credentials
 
@@ -18,10 +23,17 @@ The login step reads the username from a variable and the token from a secret, b
 
 ```sh
 gh variable set DOCKERHUB_USER --repo "<OWNER>/<REPO>" --env release --body "<DOCKERHUB_USER>"
-gh secret set DOCKERHUB_TOKEN --repo "<OWNER>/<REPO>" --env release
+gh secret set DOCKERHUB_TOKEN --repo "<OWNER>/<REPO>" --env release < "<TOKEN_FILE>"
 ```
 
-`gh secret set` prompts for the token value.
+Confirm both:
+
+```sh
+gh variable list --repo "<OWNER>/<REPO>" --env release --json name --jq '.[].name'
+gh secret list --repo "<OWNER>/<REPO>" --env release --json name --jq '.[].name'
+```
+
+The output includes `DOCKERHUB_USER` and `DOCKERHUB_TOKEN`.
 
 ## 2. Declare cosign
 
@@ -93,7 +105,7 @@ cosign verify "<IMAGE>:<VERSION>" \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
-`<VERSION>` is the release version without the leading `v`. The signing identity is the shared release workflow at `verified-actions`, because cosign signs from inside it. The exact identity rejects signatures from any other workflow or branch.
+`cosign verify` prints `The following checks were performed on each of these signatures` and exits 0. The signing identity is the shared release workflow at `verified-actions`, because cosign signs from inside it. The exact identity rejects signatures from any other workflow or branch.
 
 ## Failure modes
 

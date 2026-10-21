@@ -28,6 +28,8 @@ Substitute these values everywhere they appear in commands and files.
 | `<DEFAULT_BRANCH>` | Default branch | `main` |
 | `<CLIENT_ID>` | Client ID of the release GitHub App | |
 | `<KEY_FILE>` | Path to the release GitHub App's private key file | |
+| `<APP_ID>` | Numeric ID of the App that mints tokens: the release App, or the octo-sts App, shown on its settings page | |
+| `<RULESET_ID>` | ID of the tag ruleset, found in [step 4](#4-let-the-release-tag-through) | |
 | `<DESCRIPTION>` | One-line description of the tool | `Fictional CLI used as the worked example…` |
 | `<LICENSE>` | nixpkgs licence attribute | `asl20` |
 
@@ -57,9 +59,18 @@ These settings apply to every repository of the owner. Skip any that a previous 
 
 2. Create the package repositories, `<OWNER>/homebrew-tap` and `<OWNER>/nixpkgs`, by following [Setting up package repositories](setting-up-package-repositories.md).
 
-3. Install the release GitHub App on `<REPO>`, `homebrew-tap`, and `nixpkgs`, with `contents: write` and `pull_requests: write`. On an installation limited to selected repositories, add each repository explicitly.
+3. **`app` only.** Install the release GitHub App on `<REPO>`, `homebrew-tap`, and `nixpkgs`, with `contents: write` and `pull_requests: write`. On an installation limited to selected repositories, add each repository explicitly.
 
-4. **octo-sts only.** Skip the previous step. Confirm with the owner that the octo-sts App can access `<REPO>`, `homebrew-tap`, and `nixpkgs`, and that trust policies exist for the identities `release-please-<REPO>`, `release-<REPO>`, and `release-tap`. Trust policies are owner configuration, documented by the owner.
+   For an organisation, confirm the installation:
+
+   ```sh
+   gh api "orgs/<OWNER>/installations" \
+     --jq '.installations[] | select(.app_id == <APP_ID>) | .repository_selection'
+   ```
+
+   The output is `all`, or `selected`. For `selected`, and for a user account, open the App's **Configure** page under the owner's **Settings → GitHub Apps** and confirm all three repositories are listed.
+
+4. **`octo-sts` only.** Confirm with the owner that the octo-sts App can access `<REPO>`, `homebrew-tap`, and `nixpkgs`, and that trust policies exist for the identities `release-please-<REPO>`, `release-<REPO>`, and `release-tap`. Trust policies are owner configuration, documented by the owner.
 
 ## 2. Create the environments
 
@@ -107,7 +118,7 @@ Add required reviewers to either environment if your team wants a manual approva
 
 The release job and the release-please job both mint installation tokens from the release GitHub App. Its credentials are stored as secrets in each environment.
 
-**octo-sts only.** Skip this step. The environments hold no secrets.
+**`app` only.** On the `octo-sts` token source, skip to [step 4](#4-let-the-release-tag-through). The environments hold no secrets.
 
 1. Store both credentials in both environments.
 
@@ -156,11 +167,19 @@ release-please creates the `v*` tag with the minted token. A ruleset that restri
    gh api --method PUT "repos/<OWNER>/<REPO>/rulesets/<RULESET_ID>" --input ruleset-updated.json
    ```
 
+4. Confirm the bypass.
+
+   ```sh
+   gh api "repos/<OWNER>/<REPO>/rulesets/<RULESET_ID>" --jq '.bypass_actors'
+   ```
+
+   The output includes `{"actor_id":<APP_ID>,"actor_type":"Integration","bypass_mode":"always"}`.
+
 The bypass must be on the ruleset that imposes the restriction. Rulesets only add restrictions, so a second ruleset cannot grant an exception.
 
 ## 5. Declare the toolchain
 
-mise is the version authority for the release job. Create or extend `mise.toml` at the repository root:
+mise is the version authority for the tools the repository and the release job use. Create or extend `mise.toml` at the repository root:
 
 ```toml
 # mise.toml
@@ -321,10 +340,10 @@ Write `{{staged_path}}` exactly as `{{ "{{staged_path}}" }}`. goreleaser renders
 2. Confirm it produces an install script.
 
    ```sh
-   mise exec -- binst gen --config .config/binstaller.yml -o /tmp/install.sh
+   mise exec -- binst gen --config .config/binstaller.yml -o /tmp/install.sh && head -1 /tmp/install.sh
    ```
 
-   `binst check` returns 404 until the first release exists. That result is expected and does not indicate a problem with the spec.
+   The output ends with `#!/bin/sh`. Use `binst gen`, not `binst check`: `binst check` downloads the release assets, and returns 404 until the first release exists.
 
 Regenerate the spec whenever archive names or platforms change in `.goreleaser.yaml`.
 
@@ -544,7 +563,7 @@ not by a workflow in this repository.
 
 Run these checks from the repository root before you push.
 
-1. Lint the workflows.
+1. Lint the workflows. These are one-off checks: run them at the pinned versions, and do not add them to `mise.toml`.
 
    ```sh
    mise exec actionlint@1.7.12 -- actionlint
