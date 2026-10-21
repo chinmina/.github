@@ -1,0 +1,28 @@
+# chinmina/shed — release-please trigger (GitHub App token source).
+name: release-please
+
+on:
+  push:
+    branches: [main]
+
+# Default-deny at the workflow level. The calling job below holds the only grant.
+permissions: {}
+
+jobs:
+  release-please:
+    # A reusable workflow can only reduce the GITHUB_TOKEN permissions it is
+    # given, never raise them. Grant at least what release-please.yml's job
+    # declares, or the run fails at startup.
+    permissions:
+      contents: read # read the release-please config
+      id-token: write # declared by the reusable job on every token source
+    uses: chinmina/.github/.github/workflows/release-please.yml@verified-actions
+    with:
+      token-source: app
+    # Pass the App credentials by name. They live in the automation
+    # environment, and GitHub resolves them for the reusable job that runs
+    # there. Unlike `secrets: inherit`, named secrets also reach a reusable
+    # workflow owned by a different organisation or user.
+    secrets:
+      RELEASE_PLEASE_CLIENT_ID: ${{ secrets.RELEASE_PLEASE_CLIENT_ID }}
+      RELEASE_PLEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_PLEASE_APP_PRIVATE_KEY }}

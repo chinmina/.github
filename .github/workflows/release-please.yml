@@ -25,9 +25,12 @@
 #                          (typically with claim_pattern.ref: refs/heads/main).
 #
 # Consumers call this at @verified-actions. On the `app` token-source they pass
-# the RELEASE_PLEASE_* secrets via `secrets: inherit` (they are environment-scoped,
-# so only the reusable workflow's env-targeting job can resolve them). The
-# keyless octo-sts path needs NO secrets, so its callers omit `secrets:` entirely.
+# the RELEASE_PLEASE_* secrets BY NAME in a `secrets:` map. The secrets are
+# environment-scoped, and GitHub resolves a named secret in the environment of
+# the reusable job that reads it, so environment-only secrets arrive. Do not use
+# `secrets: inherit`: it passes nothing when the caller's owner differs from
+# chinmina, and the run continues with empty secrets. The keyless octo-sts path
+# needs NO secrets, so its callers omit `secrets:` entirely.
 
 name: Release PR automation
 
@@ -35,12 +38,10 @@ on:
   workflow_call:
     secrets:
       # App path only. Both are ENVIRONMENT-scoped to `automation` and consumed
-      # by the release-please job below (which runs in that environment). A
-      # reusable-workflow CALL job cannot hold an `environment:`, so a narrowed
-      # caller `secrets:` map would resolve EMPTY; the caller therefore delivers
-      # them with `secrets: inherit` and marks that line
-      # `# zizmor: ignore[secrets-inherit]` so the broad pass is clearly intended.
-      # The octo-sts path is keyless and passes neither.
+      # by the release-please job below (which runs in that environment). The
+      # caller passes them by name; a named secret resolves in this job's
+      # environment even though the calling job has none. The octo-sts path is
+      # keyless and passes neither.
       RELEASE_PLEASE_CLIENT_ID:
         description: >-
           GitHub App client ID. Required only for token-source "app"; consumed by

@@ -1,0 +1,30 @@
+# chinmina/shed — build, attest, and publish on the v* tag pushed by release-please.
+# Keep the filename release.yml: npm trusted publishing matches the caller's
+# workflow filename, so a later npm opt-in needs no rename.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+# Default-deny at the workflow level. The calling job below holds the only grant.
+permissions: {}
+
+jobs:
+  release:
+    # Grant at least what goreleaser-release.yml's job declares.
+    permissions:
+      contents: write # fill and publish the release, upload assets
+      id-token: write # keyless attestation
+      attestations: write # record build provenance
+    uses: chinmina/.github/.github/workflows/goreleaser-release.yml@verified-actions
+    with:
+      token-source: app
+      # On by default and kept: GitHub Release, install.sh, Homebrew, and Nix.
+      disable-docker-login: true # no container image
+      disable-npm: true # no npm package
+    # Homebrew and Nix mint the package-repository token from the App
+    # credentials in the release environment. Pass them by name.
+    secrets:
+      RELEASE_PLEASE_CLIENT_ID: ${{ secrets.RELEASE_PLEASE_CLIENT_ID }}
+      RELEASE_PLEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_PLEASE_APP_PRIVATE_KEY }}

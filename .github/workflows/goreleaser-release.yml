@@ -19,9 +19,11 @@
 # declares in mise.
 #
 # Consumers call this at @verified-actions. On the `app` token-source with
-# homebrew or nix enabled they pass the RELEASE_PLEASE_* App secrets via
-# `secrets: inherit` (they are environment-scoped, so only the reusable
-# workflow's env-targeting job can resolve them). The keyless octo-sts path
+# homebrew or nix enabled they pass the RELEASE_PLEASE_* App secrets BY NAME in
+# a `secrets:` map. The secrets are environment-scoped, and GitHub resolves a
+# named secret in the environment of the reusable job that reads it. Do not use
+# `secrets: inherit`: it passes nothing when the caller's owner differs from
+# chinmina, and the run continues with empty secrets. The keyless octo-sts path
 # needs NO secrets, so its callers omit `secrets:` entirely.
 #
 # Docker / ko image publishing: the wrapper does NOT build, sign, or push images
@@ -32,8 +34,8 @@
 # `extra-mise-tools` so signing CLIs like cosign reach PATH. A ko+cosign
 # consumer therefore: declares `cosign` in mise.toml, passes
 # `extra-mise-tools: cosign`, and configures the `release` environment with the
-# DOCKERHUB_USER variable and the DOCKERHUB_TOKEN secret (the latter delivered
-# via `secrets: inherit`). The wrapper reads the username from vars.DOCKERHUB_USER
+# DOCKERHUB_USER variable and the DOCKERHUB_TOKEN secret (the latter passed by
+# name in the caller's `secrets:` map). The wrapper reads the username from vars.DOCKERHUB_USER
 # directly -- the release job targets the caller's `release` environment, so both
 # the variable and the secret resolve there.
 # Login defaults ON ("login unless opted out"): a consumer that does NOT publish
@@ -50,12 +52,10 @@ on:
       # App path + homebrew/nix only. The same GitHub App credentials
       # release-please uses, here minting the package-repo write token.
       # ENVIRONMENT-scoped to `release` (as well as `automation`) and consumed
-      # by the release job below (which runs in that environment). A
-      # reusable-workflow CALL job cannot hold an `environment:`, so a narrowed
-      # caller `secrets:` map would resolve EMPTY; the caller therefore delivers
-      # them with `secrets: inherit` and marks that line
-      # `# zizmor: ignore[secrets-inherit]` so the broad pass is clearly
-      # intended. The octo-sts path is keyless and passes neither.
+      # by the release job below (which runs in that environment). The caller
+      # passes them by name; a named secret resolves in this job's environment
+      # even though the calling job has none. The octo-sts path is keyless and
+      # passes neither.
       RELEASE_PLEASE_CLIENT_ID:
         description: >-
           GitHub App client ID. Required only for token-source "app" with
@@ -70,12 +70,9 @@ on:
         required: false
       # Container-registry (Docker Hub) password/token. ENVIRONMENT-scoped to
       # `release` and consumed by the release job below (which runs in that
-      # environment). A reusable-workflow CALL job cannot hold an `environment:`,
-      # so a narrowed caller `secrets:` map would resolve EMPTY; the caller
-      # therefore delivers it with `secrets: inherit` and marks that line
-      # `# zizmor: ignore[secrets-inherit]` so the broad pass is clearly
-      # intended. Its paired username is the release-environment
-      # variable DOCKERHUB_USER (read via the vars context, no inherit needed).
+      # environment). The caller passes it by name. Its paired username is the
+      # release-environment variable DOCKERHUB_USER, read via the vars context,
+      # which resolves without being passed.
       # Only used by the login step below, gated on `disable-docker-login`.
       DOCKERHUB_TOKEN:
         description: >-

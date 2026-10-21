@@ -1,0 +1,15 @@
+[tools]
+go = "1.27.3"
+golangci-lint = "2.15.0"
+goreleaser = "2.18.3"
+just = "1.59.0"
+
+# binstaller has no mise registry short name. The alias makes it surface under
+# the key `binstaller` (which setup-release-toolchain checks for), and
+# rename_exe exposes the `binst` CLI that binstaller-install-script calls.
+[tool_alias]
+binstaller = "github:binary-install/binstaller"
+
+[tools.binstaller]
+version = "0.12.0"
+rename_exe = "binst" # the archive ships `binst`; without this the shim is named `binstaller`

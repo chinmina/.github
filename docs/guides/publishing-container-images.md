@@ -1,0 +1,117 @@
+# Publishing container images
+
+This guide adds a container image to a repository that already uses the shared release pipeline. goreleaser builds, signs, and pushes the image. The release workflow only logs in to Docker Hub before the build and installs the signing tools you list.
+
+## Before you start
+
+- The repository releases through the pipeline. See [Adopting the release pipeline](adopting-the-release-pipeline.md).
+- A Docker Hub account or organisation that owns the image repository, and an access token with write access to it.
+
+| Placeholder | Meaning | Example |
+| ----------- | ------- | ------- |
+| `<OWNER>` | GitHub organisation or user that owns the repository | `chinmina` |
+| `<REPO>` | Repository name | `shed` |
+| `<TOOL>` | goreleaser `project_name` | `shed` |
+| `<IMAGE>` | Docker Hub image repository | `chinmina/shed` |
+| `<DOCKERHUB_USER>` | Docker Hub username for the access token | `chinminabot` |
+| `<TOKEN_FILE>` | Path to a file holding the Docker Hub access token | |
+| `<VERSION>` | Release version, without the leading `v` | `1.2.3` |
+
+## 1. Store the Docker Hub credentials
+
+The login step reads the username from a variable and the token from a secret, both in the `release` environment.
+
+```sh
+gh variable set DOCKERHUB_USER --repo "<OWNER>/<REPO>" --env release --body "<DOCKERHUB_USER>"
+gh secret set DOCKERHUB_TOKEN --repo "<OWNER>/<REPO>" --env release < "<TOKEN_FILE>"
+```
+
+Confirm both:
+
+```sh
+gh variable list --repo "<OWNER>/<REPO>" --env release --json name --jq '.[].name'
+gh secret list --repo "<OWNER>/<REPO>" --env release --json name --jq '.[].name'
+```
+
+The output includes `DOCKERHUB_USER` and `DOCKERHUB_TOKEN`.
+
+## 2. Declare cosign
+
+Declare `cosign` in `mise.toml`, so the signing step has a pinned version:
+
+```toml
+# mise.toml
+[tools]
+cosign = "3.1.4"
+```
+
+## 3. Turn on the channel
+
+In `.github/workflows/release.yml`, delete `disable-docker-login: true`, list `cosign` in `extra-mise-tools`, and pass `DOCKERHUB_TOKEN` by name:
+
+```yaml
+# .github/workflows/release.yml (excerpt)
+    uses: chinmina/.github/.github/workflows/goreleaser-release.yml@verified-actions
+    with:
+      token-source: app
+      disable-npm: true
+      extra-mise-tools: cosign # names only; versions come from mise.toml
+    secrets:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      # On the app token source with Homebrew or Nix on, also pass
+      # RELEASE_PLEASE_CLIENT_ID and RELEASE_PLEASE_APP_PRIVATE_KEY.
+```
+
+A tool in `extra-mise-tools` must also be declared in `mise.toml`. Declaring it alone does not install it for the release job.
+
+## 4. Configure the image in goreleaser
+
+The release workflow never sets the image repository. Select it in the goreleaser config, so local snapshot builds push to the ephemeral `ttl.sh` registry and CI pushes to Docker Hub. This example uses ko:
+
+```yaml
+# .goreleaser.yaml (excerpt)
+kos:
+  - repositories:
+      - "{{ if .Env.KO_DOCKER_REPO }}{{ .Env.KO_DOCKER_REPO }}{{ else }}ttl.sh/<TOOL>{{ end }}"
+    tags: ["{{ .Version }}"]
+    bare: true
+    platforms: ["linux/amd64", "linux/arm64"]
+
+docker_signs:
+  - cmd: cosign
+    args: ["sign", "--yes", "${artifact}@${digest}"]
+    artifacts: manifests
+    output: true
+```
+
+Set `KO_DOCKER_REPO` for CI only, in `mise.toml`:
+
+```toml
+# mise.toml
+[env]
+KO_DOCKER_REPO = "{{ get_env(name='CI', default='') | replace(from='true', to='docker.io/<IMAGE>') }}"
+```
+
+With `CI=true`, which GitHub Actions sets, the value is `docker.io/<IMAGE>`. Without it, the value is empty and goreleaser falls back to `ttl.sh`.
+
+## 5. Check the next release
+
+After the next release, confirm the image and its signature:
+
+```sh
+docker pull "<IMAGE>:<VERSION>"
+cosign verify "<IMAGE>:<VERSION>" \
+  --certificate-identity "https://github.com/chinmina/.github/.github/workflows/goreleaser-release.yml@refs/heads/verified-actions" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+`cosign verify` prints `The following checks were performed on each of these signatures` and exits 0. The signing identity is the shared release workflow at `verified-actions`, because cosign signs from inside it. The exact identity rejects signatures from any other workflow or branch.
+
+## Failure modes
+
+| Symptom | Cause | Fix |
+| ------- | ----- | --- |
+| *Validate docker login inputs* fails | `DOCKERHUB_USER` is not set in the `release` environment | Complete step 1. |
+| Login fails with an authentication error | `DOCKERHUB_TOKEN` is missing or wrong, or the caller does not pass it by name | Set the secret in `release` and pass it in the caller's `secrets:` map. |
+| The image is pushed to `ttl.sh` from CI | `KO_DOCKER_REPO` is empty during the release | Check the `[env]` entry, or set `KO_DOCKER_REPO` another way for CI. |
+| `setup-release-toolchain` fails: `cosign` not declared | `cosign` is in `extra-mise-tools` but not in `mise.toml` | Declare it in `mise.toml`, by name and version. |

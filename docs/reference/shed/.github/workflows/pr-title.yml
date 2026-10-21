@@ -1,0 +1,16 @@
+# chinmina/shed — Conventional Commits check on pull request titles.
+# Squash merges use the PR title as the commit message, and release-please
+# reads commit messages to choose the next version.
+name: PR title
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions: {}
+
+jobs:
+  conventional-pr-title:
+    permissions:
+      pull-requests: read # read the PR title
+    uses: chinmina/.github/.github/workflows/conventional-pr-title.yml@verified-actions
