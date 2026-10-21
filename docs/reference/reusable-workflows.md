@@ -88,7 +88,7 @@ Builds with goreleaser, fills the release-please draft, generates `install.sh`, 
 | `npm-main-package-dir` | string | `.github/workflows/npm/main` | Directory holding the main package's `package.json`. |
 | `binstaller-spec` | string | `.config/binstaller.yml` | Path to the committed binstaller spec. |
 | `extra-mise-tools` | string | `""` | Extra tool names to install through mise, for example `cosign`. Names only; versions come from `mise.toml`. |
-| `pre-build` | string | `""` | Shell run after tool setup and before goreleaser. goreleaser `before.hooks` is preferred for build steps. |
+| `pre-build` | string | `""` | Shell run after tool setup and before goreleaser. goreleaser `before.hooks` also runs build steps, and runs in local snapshot builds as well. |
 | `sts-scope` | string | repository owner | octo-sts scope whose policies are consulted. `octo-sts` only. |
 | `sts-release-identity` | string | `release-<repo>` | octo-sts identity for the release token. `octo-sts` only. |
 | `sts-tap-identity` | string | `release-tap` | octo-sts identity for the package-repository token. `octo-sts` with Homebrew or Nix only. |
