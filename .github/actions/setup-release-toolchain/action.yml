@@ -34,7 +34,7 @@ runs:
     # cache per tool). reshim writes the shims dir to $GITHUB_PATH so the CLIs
     # resolve in later steps.
     - name: Install mise + CLIs
-      uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+      uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7 # v5.2.0
       with:
         install_args: ${{ inputs.mise-tools }}
         reshim: true
