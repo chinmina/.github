@@ -89,11 +89,11 @@ After the next release, confirm the image and its signature:
 ```sh
 docker pull "<IMAGE>:<VERSION>"
 cosign verify "<IMAGE>:<VERSION>" \
-  --certificate-identity-regexp "^https://github.com/chinmina/.github/" \
+  --certificate-identity "https://github.com/chinmina/.github/.github/workflows/goreleaser-release.yml@refs/heads/verified-actions" \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
-`<VERSION>` is the release version without the leading `v`. The signing identity is the reusable workflow in `chinmina/.github`, because cosign signs from inside it.
+`<VERSION>` is the release version without the leading `v`. The signing identity is the shared release workflow at `verified-actions`, because cosign signs from inside it. The exact identity rejects signatures from any other workflow or branch.
 
 ## Failure modes
 
