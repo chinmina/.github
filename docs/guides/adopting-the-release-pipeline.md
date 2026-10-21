@@ -24,7 +24,7 @@ Substitute these values everywhere they appear in commands and files.
 | ----------- | ------- | ------------ |
 | `<OWNER>` | GitHub organisation or user that owns the repository | `chinmina` |
 | `<REPO>` | Repository name | `shed` |
-| `<TOOL>` | Binary and package name; usually the same as `<REPO>` | `shed` |
+| `<TOOL>` | Binary, archive, and package name, set as goreleaser's `project_name` | `shed` |
 | `<DEFAULT_BRANCH>` | Default branch | `main` |
 | `<CLIENT_ID>` | Client ID of the release GitHub App | |
 | `<KEY_FILE>` | Path to the release GitHub App's private key file | |
@@ -229,6 +229,10 @@ Create or update `.goreleaser.yaml`. The `release` block is required. The `homeb
 # .goreleaser.yaml
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
 version: 2
+
+# Names the archives, cask, and Nix package. Without it, goreleaser uses the
+# repository name.
+project_name: <TOOL>
 
 builds:
   - id: release

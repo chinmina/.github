@@ -1,6 +1,10 @@
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
 version: 2
 
+# Names the archives, cask, and Nix package. Without it, goreleaser uses the
+# repository name.
+project_name: shed
+
 builds:
   - id: release
     binary: shed
