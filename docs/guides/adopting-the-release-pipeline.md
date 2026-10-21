@@ -165,7 +165,7 @@ mise is the version authority for the release job. Create or extend `mise.toml` 
 ```toml
 # mise.toml
 [tools]
-go = "1.27.2"
+go = "1.27.3"
 goreleaser = "2.18.3"
 
 # binstaller has no mise registry short name. The alias makes it surface under

@@ -30,7 +30,7 @@ Declare `cosign` in `mise.toml`, so the signing step has a pinned version:
 ```toml
 # mise.toml
 [tools]
-cosign = "3.1.3"
+cosign = "3.1.4"
 ```
 
 ## 3. Turn on the channel
