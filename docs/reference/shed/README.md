@@ -38,6 +38,7 @@ These settings live in GitHub, not in files.
 | `release` environment | Deployment policy: tag `v*`. Secrets: `RELEASE_PLEASE_CLIENT_ID`, `RELEASE_PLEASE_APP_PRIVATE_KEY`. |
 | Release GitHub App | Installed on `shed`, `homebrew-tap`, and `nixpkgs`, with `contents: write` and `pull_requests: write`. |
 | Rulesets | The release App is an `always` bypass actor on any `v*` tag ruleset in `shed`, and on the default-branch rulesets of `homebrew-tap` and `nixpkgs`. |
+| Immutable releases | Enabled. Published releases cannot change assets or move their tag. |
 
 ## Notable choices
 
@@ -92,6 +93,12 @@ gh attestation verify shed_linux_amd64.tar.gz --repo chinmina/shed \
 ```
 
 `--signer-workflow` is required. The shared workflow in `chinmina/.github` signs every attestation, so `--repo` alone looks for a signer in `chinmina/shed` and fails.
+
+Releases are immutable, so GitHub also records a release attestation of the tag, commit, and every asset:
+
+```sh
+gh release verify-asset v1.2.3 shed_linux_amd64.tar.gz --repo chinmina/shed
+```
 
 ## octo-sts token source
 

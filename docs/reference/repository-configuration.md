@@ -29,6 +29,16 @@ GitHub creates a missing environment on first use, with no protection rules. Eac
 - A ruleset that restricts creating `v*` tags lists the release GitHub App as an `always` bypass actor. On the `octo-sts` token source, the octo-sts App takes its place. Bypass must be on the restricting ruleset, because rulesets only add restrictions.
 - `required_signatures` on the default branch is compatible. release-please commits through the API, and GitHub signs those commits.
 
+## Immutable releases
+
+The pipeline is compatible with [immutable releases](https://docs.github.com/en/code-security/supply-chain-security/understanding-your-software-supply-chain/immutable-releases). Enable them per repository with `gh api --method PUT "repos/<OWNER>/<REPO>/immutable-releases"`, or for an organisation under **Settings → Repository → General → Releases**. They apply to releases published after they are enabled.
+
+| Stage | Effect of immutability |
+| ----- | ---------------------- |
+| Draft | None. goreleaser fills the draft, replaces assets on a re-run, and `install.sh` is uploaded with `--clobber`. |
+| Publish | The final step publishes the draft, which locks it. Every asset is uploaded and attested by then. |
+| Published | Assets cannot be uploaded, replaced, or deleted, and the tag cannot be moved or deleted. Notes, title, and the pre-release and latest flags stay editable. GitHub records a release attestation, checked with `gh release verify` (GitHub CLI 2.81.0 or later). |
+
 ## release-please config
 
 ### Required keys
