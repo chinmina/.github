@@ -344,13 +344,14 @@ Each caller sets `permissions: {}` for the workflow and grants permissions on th
        permissions:
          contents: read # read the release-please config
          id-token: write # declared by the reusable job on every token source
-       uses: chinmina/.github/.github/workflows/release-please.yml@verified-actions # zizmor: ignore[secrets-inherit]
+       uses: chinmina/.github/.github/workflows/release-please.yml@verified-actions
        with:
          token-source: app
-       # The App secrets are scoped to the automation environment. Only the
-       # reusable workflow's job runs there, so inherit is the only way to
-       # reach them: a named secrets map would resolve empty.
-       secrets: inherit
+       # The App secrets live in the automation environment. GitHub resolves
+       # them for the reusable job, which runs there.
+       secrets:
+         RELEASE_PLEASE_CLIENT_ID: ${{ secrets.RELEASE_PLEASE_CLIENT_ID }}
+         RELEASE_PLEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_PLEASE_APP_PRIVATE_KEY }}
    ```
 
 2. Create `.github/workflows/release.yml`. Keep the filename: npm trusted publishing matches it, so adding npm later needs no rename.
@@ -371,21 +372,23 @@ Each caller sets `permissions: {}` for the workflow and grants permissions on th
          contents: write # fill and publish the release
          id-token: write # keyless attestation
          attestations: write # record build provenance
-       uses: chinmina/.github/.github/workflows/goreleaser-release.yml@verified-actions # zizmor: ignore[secrets-inherit]
+       uses: chinmina/.github/.github/workflows/goreleaser-release.yml@verified-actions
        with:
          token-source: app
          disable-docker-login: true # no container image
          disable-npm: true # no npm package
        # Homebrew and Nix mint the package-repository token from the App
        # secrets in the release environment.
-       secrets: inherit
+       secrets:
+         RELEASE_PLEASE_CLIENT_ID: ${{ secrets.RELEASE_PLEASE_CLIENT_ID }}
+         RELEASE_PLEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_PLEASE_APP_PRIVATE_KEY }}
    ```
 
    Every channel is on by default. List only the channels the tool does not ship, and delete a channel's line to turn it on.
 
-   Each `uses:` line carries `# zizmor: ignore[secrets-inherit]`, which marks the broad secrets pass as intended.
+   Pass secrets by name, not with `secrets: inherit`. A named secret resolves in the environment of the reusable job that uses it, even when it exists only in that environment. `secrets: inherit` passes nothing when the caller and `chinmina/.github` have different owners, and the run still succeeds with empty secrets.
 
-   **octo-sts only.** In both callers, set `token-source: octo-sts`, and delete `secrets: inherit` and the zizmor comment. The [shed example](../reference/shed/README.md#octo-sts-token-source) shows both files.
+   **octo-sts only.** In both callers, set `token-source: octo-sts` and delete the `secrets:` block. The [shed example](../reference/shed/README.md#octo-sts-token-source) shows both files.
 
 3. Create `.github/workflows/pr-title.yml`. Squash merges use the PR title as the commit message, and release-please reads commit messages to choose the version.
 

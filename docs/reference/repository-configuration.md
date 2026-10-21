@@ -12,7 +12,7 @@ Configuration a consuming repository must provide for the shared release pipelin
 
 The tag caller must be named `release.yml`. npm trusted publishing matches the caller's workflow filename, so the name is fixed even for repositories that do not publish to npm yet.
 
-A caller that uses `secrets: inherit` carries `# zizmor: ignore[secrets-inherit]` on its `uses:` line. A caller without `secrets:` omits the comment.
+A caller passes each secret by name in a `secrets:` map. `secrets: inherit` passes nothing when the caller's owner is not `chinmina`, and the run continues with empty secrets. See [Reusable workflows](reusable-workflows.md#secrets).
 
 ## Environments
 

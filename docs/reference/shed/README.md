@@ -43,8 +43,7 @@ These settings live in GitHub, not in files.
 
 ### Caller workflows
 
-- Both callers pass `secrets: inherit`. The App secrets are scoped to the environments, and a calling job cannot declare an environment, so a named `secrets:` map would resolve empty.
-- Each `uses:` line carries `# zizmor: ignore[secrets-inherit]`, marking the broad pass as intended.
+- Both callers pass the two App secrets by name. GitHub resolves them in the environment of the reusable job that uses them, so environment-only secrets arrive. `secrets: inherit` would also work for a `chinmina` repository, but passes nothing to a reusable workflow under a different owner.
 - The release-please caller grants `id-token: write` although the `app` token source does not use it. The reusable job declares it, and a caller that grants less fails at startup.
 
 ### release-please
@@ -93,7 +92,7 @@ gh attestation verify shed_linux_amd64.tar.gz --repo chinmina/shed
 
 ## octo-sts token source
 
-An owner with [octo-sts][octo-sts] instead of a release App changes only the two callers. Set `token-source: octo-sts`, and remove `secrets: inherit` and the zizmor comment, because nothing is stored. The environments then hold no secrets.
+An owner with [octo-sts][octo-sts] instead of a release App changes only the two callers. Set `token-source: octo-sts`, and remove the `secrets:` block, because nothing is stored. The environments then hold no secrets.
 
 ```yaml
 # .github/workflows/release-please.yml (octo-sts token source)

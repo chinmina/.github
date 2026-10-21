@@ -13,6 +13,7 @@ A repository adds two short caller workflows and its release configuration. The 
 
 ```yaml
 # .github/workflows/release.yml in a consuming repository
+name: release
 on:
   push:
     tags: ["v*"]
@@ -20,14 +21,16 @@ permissions: {}
 jobs:
   release:
     permissions:
-      contents: write
-      id-token: write
-      attestations: write
-    uses: chinmina/.github/.github/workflows/goreleaser-release.yml@verified-actions # zizmor: ignore[secrets-inherit]
+      contents: write # fill and publish the release
+      id-token: write # keyless attestation
+      attestations: write # record build provenance
+    uses: chinmina/.github/.github/workflows/goreleaser-release.yml@verified-actions
     with:
       disable-docker-login: true
       disable-npm: true
-    secrets: inherit
+    secrets:
+      RELEASE_PLEASE_CLIENT_ID: ${{ secrets.RELEASE_PLEASE_CLIENT_ID }}
+      RELEASE_PLEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_PLEASE_APP_PRIVATE_KEY }}
 ```
 
 | Start here | For |

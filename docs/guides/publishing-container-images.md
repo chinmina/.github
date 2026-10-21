@@ -35,16 +35,19 @@ cosign = "3.1.3"
 
 ## 3. Turn on the channel
 
-In `.github/workflows/release.yml`, delete `disable-docker-login: true`, list `cosign` in `extra-mise-tools`, and keep `secrets: inherit` so `DOCKERHUB_TOKEN` reaches the release job:
+In `.github/workflows/release.yml`, delete `disable-docker-login: true`, list `cosign` in `extra-mise-tools`, and pass `DOCKERHUB_TOKEN` by name:
 
 ```yaml
 # .github/workflows/release.yml (excerpt)
-    uses: chinmina/.github/.github/workflows/goreleaser-release.yml@verified-actions # zizmor: ignore[secrets-inherit]
+    uses: chinmina/.github/.github/workflows/goreleaser-release.yml@verified-actions
     with:
       token-source: app
       disable-npm: true
       extra-mise-tools: cosign # names only; versions come from mise.toml
-    secrets: inherit
+    secrets:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      # On the app token source with Homebrew or Nix on, also pass
+      # RELEASE_PLEASE_CLIENT_ID and RELEASE_PLEASE_APP_PRIVATE_KEY.
 ```
 
 A tool in `extra-mise-tools` must also be declared in `mise.toml`. Declaring it alone does not install it for the release job.
@@ -97,6 +100,6 @@ cosign verify "<IMAGE>:<VERSION>" \
 | Symptom | Cause | Fix |
 | ------- | ----- | --- |
 | *Validate docker login inputs* fails | `DOCKERHUB_USER` is not set in the `release` environment | Complete step 1. |
-| Login fails with an authentication error | `DOCKERHUB_TOKEN` is missing or wrong, or the caller does not pass `secrets: inherit` | Set the secret in `release` and keep `secrets: inherit`. |
+| Login fails with an authentication error | `DOCKERHUB_TOKEN` is missing or wrong, or the caller does not pass it by name | Set the secret in `release` and pass it in the caller's `secrets:` map. |
 | The image is pushed to `ttl.sh` from CI | `KO_DOCKER_REPO` is empty during the release | Check the `[env]` entry, or set `KO_DOCKER_REPO` another way for CI. |
 | `setup-release-toolchain` fails: `cosign` not declared | `cosign` is in `extra-mise-tools` but not in `mise.toml` | Declare it in `mise.toml`, by name and version. |

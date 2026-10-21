@@ -28,7 +28,7 @@ Runs release-please with a minted installation token. A tag pushed with an insta
 | -------- | ----- |
 | Job environment | `automation` |
 | Caller permissions | `contents: read`, `id-token: write` |
-| Secrets | `secrets: inherit` on the `app` token source; none on `octo-sts` |
+| Secrets | Both App secrets, by name, on the `app` token source; none on `octo-sts` |
 
 `id-token: write` is required on both token sources, because the job declares it for both.
 
@@ -49,7 +49,10 @@ Runs release-please with a minted installation token. A tag pushed with an insta
 | `RELEASE_PLEASE_CLIENT_ID` | `automation` | `token-source: app` |
 | `RELEASE_PLEASE_APP_PRIVATE_KEY` | `automation` | `token-source: app` |
 
-The secrets are environment-scoped. A job that calls a reusable workflow cannot declare an environment, so a named `secrets:` map resolves them as empty. `secrets: inherit` passes them through to the job that runs in `automation`.
+The caller passes each secret by name, for example `RELEASE_PLEASE_CLIENT_ID: ${{ secrets.RELEASE_PLEASE_CLIENT_ID }}`. GitHub resolves the name in the environment of the reusable job that uses it, so a secret that exists only in `automation` arrives.
+
+> [!WARNING]
+> Do not rely on `secrets: inherit`. It passes nothing when the caller and `chinmina/.github` have different owners, such as a user-owned repository, and the run continues with empty secrets.
 
 ### Steps
 
@@ -69,7 +72,7 @@ Builds with goreleaser, fills the release-please draft, generates `install.sh`, 
 | -------- | ----- |
 | Job environment | `release` |
 | Caller permissions | `contents: write`, `id-token: write`, `attestations: write` |
-| Secrets | `secrets: inherit` when Docker login is on, or on the `app` token source with Homebrew or Nix on; otherwise none |
+| Secrets | `DOCKERHUB_TOKEN` when Docker login is on, and both App secrets on the `app` token source with Homebrew or Nix on, all by name; otherwise none |
 
 ### Inputs
 
@@ -103,7 +106,7 @@ Tool versions come from the consumer's `mise.toml`. The workflow has no version 
 | `DOCKERHUB_TOKEN` | secret | `release` | Docker login on |
 | `DOCKERHUB_USER` | variable | `release` | Docker login on |
 
-Variables resolve from the `release` environment without `secrets: inherit`.
+Variables resolve from the caller's `release` environment without being passed.
 
 ### Tokens
 

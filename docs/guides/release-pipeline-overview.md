@@ -182,7 +182,7 @@ flowchart LR
 | - | ----- | ---------- |
 | Stored credential | App private key, in both environments | None |
 | Per-repository setup | Two secrets in each environment; App installed on the repository | Owner trust policies for `release-please-<REPO>`, `release-<REPO>`, and `release-tap` |
-| Caller `secrets:` | `secrets: inherit` | Omitted |
+| Caller `secrets:` | Both App secrets, by name | Omitted |
 
 ## Where configuration lives
 
@@ -216,7 +216,7 @@ flowchart LR
 
     callers -- "uses @verified-actions" --> workflows
     config -- "read by" --> workflows
-    envs -- "secrets: inherit" --> workflows
+    envs -- "secrets, by name" --> workflows
     workflows -- "commits cask<br/>and recipe" --> pkgSG
 
     style repoSG fill:none,stroke:#15803d,stroke-dasharray:6 4
