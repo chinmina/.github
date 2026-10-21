@@ -123,7 +123,7 @@ The recipe is written to `pkgs/<TOOL>/default.nix` in `<OWNER>/nixpkgs`.
 | `homebrew_casks[].binaries` | `binst` 0.12.0 fails to load the goreleaser config | Omit it; goreleaser defaults to the build's binary |
 | `nix[].main_program`, `nix[].formatter` | `binst` 0.12.0 rejects both | Omit them |
 
-goreleaser does not yet emit `postflight_steps` itself. [goreleaser#6873][goreleaser-6873] tracks `hooks.post.install_steps`, which will replace the `custom_block`.
+No stable goreleaser release emits `postflight_steps` yet. [goreleaser#6873][goreleaser-6873], merged for v2.19, adds `hooks.post.install_steps` with a `{{ .StagedPath }}` template variable. Once v2.19 is released, `install_steps` replaces the `custom_block`, and the `{{ "{{staged_path}}" }}` escape is no longer needed.
 
 ## mise.toml
 
@@ -176,4 +176,4 @@ Regenerate the spec when archive names or platforms change in the goreleaser con
 
 goreleaser pushes unsigned commits to each default branch. The token's actor must be an `always` bypass actor on any ruleset protecting that branch: the release GitHub App, or the octo-sts App on the `octo-sts` token source. [Setting up package repositories](../guides/setting-up-package-repositories.md) creates both repositories.
 
-[goreleaser-6873]: https://github.com/goreleaser/goreleaser/issues/6873
+[goreleaser-6873]: https://github.com/goreleaser/goreleaser/pull/6873

@@ -59,7 +59,7 @@ homebrew_casks:
     # Clear the macOS quarantine attribute so the binary runs without a
     # Gatekeeper prompt. hooks.post.install would emit the deprecated
     # `postflight` stanza, so custom_block carries `postflight_steps` until
-    # goreleaser supports it (goreleaser/goreleaser#6873).
+    # goreleaser v2.19 ships hooks.post.install_steps (goreleaser/goreleaser#6873).
     # `{{ "{{staged_path}}" }}` renders as Homebrew's `{{staged_path}}` token.
     custom_block: |
       postflight_steps do

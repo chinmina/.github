@@ -275,7 +275,8 @@ homebrew_casks:
     homepage: "https://github.com/<OWNER>/<REPO>"
     description: "<DESCRIPTION>"
     # Clear the macOS quarantine attribute after install. custom_block carries
-    # postflight_steps until goreleaser supports it (goreleaser/goreleaser#6873).
+    # postflight_steps until goreleaser v2.19 ships hooks.post.install_steps
+    # (goreleaser/goreleaser#6873).
     custom_block: |
       postflight_steps do
         on_macos do
