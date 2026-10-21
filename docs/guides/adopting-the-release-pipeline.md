@@ -568,7 +568,7 @@ Run these checks from the repository root before you push.
 
    ```sh
    mise exec actionlint@1.7.12 -- actionlint
-   mise exec zizmor@1.25.2 -- zizmor .github/workflows
+   mise exec zizmor@1.31.1 -- zizmor .github/workflows
    ```
 
    Both report no findings.
