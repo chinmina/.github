@@ -8,11 +8,11 @@ Prose-level decisions: choosing between lists and paragraphs, sentence structure
 
 1. **Conceptual explanations** - describing what something is or why it matters
 2. **Context-setting** before a procedure
-3. **"How it works" sections** that describe system behavior
+3. **"How it works" sections** that describe system behaviour
 
 **Example:**
 
-> "Organization profiles are a way to facilitate cross-repository access for pipelines as well as managing the permissions provided by the tokens that Chinmina Bridge creates."
+> "Organisation profiles are a way to facilitate cross-repository access for pipelines as well as managing the permissions provided by the tokens that Chinmina Bridge creates."
 
 ### Use Numbered Lists For
 
@@ -22,7 +22,7 @@ Prose-level decisions: choosing between lists and paragraphs, sentence structure
 For procedures, use a plain numbered list. Indent follow-on paragraphs and code blocks by three spaces so they stay inside the list item:
 
 ````markdown
-1. Create an application in your GitHub organization.
+1. Create an application in your GitHub organisation.
 
    Collect the "Application ID" of the application created.
 
@@ -43,17 +43,15 @@ Write every item number as written (`1.`, `2.`, `3.`), so the source reads corre
 
 **Example:**
 
-> Three endpoints are exposed:
+> The service exposes these endpoints:
 >
-> - `/token`, which returns a token and its expiry, and
-> - `/git-credentials`, which returns the token and repository metadata in the Git Credentials format.
-> - `/healthcheck`, which returns 200.
+> - `/token` returns a token and its expiry.
+> - `/git-credentials` returns the token and repository metadata in the Git Credentials format.
+> - `/healthcheck` returns 200.
 
 ### Paragraph Length
 
-Keep paragraphs to **1-3 sentences**. Single-sentence paragraphs are acceptable and common.
-
-A run of one-sentence paragraphs is as poor as one long paragraph. Fuse a claim with the mechanism that justifies it rather than asserting each separately.
+Keep paragraphs to **1-3 sentences**. A single-sentence paragraph is fine on its own, but a run of them is as poor as one long paragraph. Fuse a claim with the mechanism that justifies it rather than asserting each separately.
 
 **Bad:** (a sequence of single-thought paragraphs)
 
@@ -69,9 +67,9 @@ A run of one-sentence paragraphs is as poor as one long paragraph. Fuse a claim 
 
 **Good:**
 
-> "Chinmina itself is a simple service, but it sits in the middle of an ecosystem. This means that a working installation requires a number of setup items."
+> "Chinmina is a simple service in the middle of an ecosystem, so a working installation needs several setup items."
 >
-> "Before you start, there are a few things you'll need to have:"
+> "Before you start, you need:"
 
 **Bad:** (Single long paragraph)
 
@@ -99,13 +97,13 @@ Start instructions with the action verb. Add context after the command when nece
 
 **Good:**
 
-- "Create an application in your GitHub organization."
+- "Create an application in your GitHub organisation."
 - "Set the environment variable `GITHUB_APP_PRIVATE_KEY_ARN` to the ARN of the **alias** that has just been created."
 - "Run `direnv allow` to bring the updated configuration into the environment."
 
 **Bad:**
 
-- "You should create an application in your GitHub organization."
+- "You should create an application in your GitHub organisation."
 - "The environment variable `GITHUB_APP_PRIVATE_KEY_ARN` needs to be set to the ARN of the alias."
 - "In order to activate the configuration, run `direnv allow`."
 
@@ -154,7 +152,7 @@ This pattern keeps procedural guides self-contained: the reader finishes the gui
 
 ### Headings
 
-Reference headings are compact noun or rule phrases, one to four words. Existing pages use `## Purpose`, `## Characteristics`, `## Log format`, `## Caller-scoped repositories`, and `## Response format`.
+Reference headings are compact noun or rule phrases, one to four words. Numbered guide step headings are the exception: they are short imperative phrases after the step number, such as `## 4. Let the release tag through`, and need not fit in four words. Existing pages use `## Purpose`, `## Characteristics`, `## Log format`, `## Caller-scoped repositories`, and `## Response format`.
 
 A heading names what the section covers, or states the rule it enforces. It does not need a copula, and it does not carry rhetorical shape.
 
@@ -168,7 +166,7 @@ A heading names what the section covers, or states the rule it enforces. It does
 
 - `## The request target is not a security boundary` — long; the claim belongs in the body
 - `` ## `protocol` and `host` are required `` — the copula is dead weight
-- `## Protocol integration, not authorization` — "X, not Y" is rhetorical shape
+- `## Protocol integration, not authorisation` — "X, not Y" is rhetorical shape
 - `## Request target` — a bare category noun that does not describe the content
 
 Keep the anchor usable, because other pages link to it. `## Only https://github.com supported` yields `#only-httpsgithubcom-supported`.

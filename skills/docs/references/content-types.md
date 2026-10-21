@@ -1,6 +1,6 @@
-# Content Types and File Organization
+# Content Types and File Organisation
 
-Detailed templates for each content type and file organization conventions. The high-level Diátaxis framework and mental model are in the parent SKILL.md; this reference provides the detailed structure for creating or restructuring pages.
+Detailed templates for each content type and file organisation conventions. The high-level Diátaxis framework and mental model are in the parent SKILL.md; this reference provides the detailed structure for creating or restructuring pages.
 
 ## How-to Guides
 
@@ -70,7 +70,7 @@ Reference material provides facts for lookup during active work.
 
 **Structure:**
 
-- Organize by the structure of what's being described (workflows, inputs, config keys)
+- Organise by the structure of what's being described (workflows, inputs, config keys)
 - Use consistent patterns (tables for inputs and options, H6 for single parameters)
 - Be exhaustive—list every option
 
@@ -132,7 +132,7 @@ When introducing a new concept, follow this structure:
 
 > "Audit logs provide a level of non-repudiation for the system (Purpose). These logs are written to the container's stdout, and cannot be disabled (Mechanics)."
 
-## File Organization
+## File Organisation
 
 ### File Naming
 

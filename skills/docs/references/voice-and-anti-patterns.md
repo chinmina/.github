@@ -18,7 +18,7 @@ The documentation assumes a knowledgeable reader (DevOps engineers, platform eng
 
 **Good:**
 
-- "Before you start, there are a few things you'll need to have:"
+- "Before you start, you need:"
 - "Create an API key with access to the REST API."
 - "Run `direnv allow` to bring the updated configuration into the environment."
 
@@ -62,7 +62,7 @@ State facts and instructions plainly. Avoid hedging and softening language.
 
 ### Confidence: Assert with Honest Caveats
 
-Make confident recommendations. State limitations clearly without apologizing.
+Make confident recommendations. State limitations clearly without apologising.
 
 **Good:**
 
@@ -138,7 +138,7 @@ Two-item lists take no comma: "written and invoked", not "written, and invoked".
 
 **Good:**
 
-> "Use a 'bot' user to create the token if you can, as this will not be affected when personnel in your organization change."
+> "Use a 'bot' user to create the token if you can, as this will not be affected when personnel in your organisation change."
 
 ### No Rhetorical Questions
 
@@ -180,7 +180,7 @@ These constructions stage a fact rather than state it. They read as generated pr
 
 **Good:**
 
-> "Authorization is determined by three controls:"
+> "Authorisation is determined by three controls:"
 
 **Bad:**
 

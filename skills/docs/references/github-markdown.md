@@ -4,10 +4,10 @@ Implementation details for GitHub Flavored Markdown (GFM): page structure, alert
 
 ## Not Supported
 
-None of the following render on GitHub. Do not use them:
+Do not use the following. Most do not render on GitHub, and frontmatter renders as noise:
 
 - MDX imports and JSX components (`<Steps>`, `<Aside>`, `<Badge>`, custom components)
-- YAML frontmatter for titles or metadata
+- YAML frontmatter for titles or metadata. GitHub shows it as a table above the page; put the title in the `#` heading instead
 - Directive syntax (`:::note`, `:::caution`)
 - Code block attributes (`title="..."`, line highlighting such as `{3-5}` or `/pattern/`)
 - D2 diagrams and Mermaid `%%{init: ...}%%` theme overrides
@@ -16,7 +16,7 @@ None of the following render on GitHub. Do not use them:
 
 Start each page with a single `#` heading in sentence case, followed by one or two sentences stating what the page covers. Use `##` for sections and `###` for subsections. Avoid going deeper than `####`, except for the H6 parameter pattern below.
 
-**Title formatting:** Use sentence case (capitalize only the first word and proper nouns), not title case.
+**Title formatting:** Use sentence case (capitalise only the first word and proper nouns), not title case.
 
 **Good:** `# Adopting the release pipeline`
 
@@ -32,7 +32,7 @@ Use GitHub alerts for notes, tips, and warnings. Use them sparingly: one or two 
 
 > [!TIP]
 > Use a 'bot' user to create the token if you can, as this will not be affected
-> when personnel in your organization change.
+> when personnel in your organisation change.
 
 > [!IMPORTANT]
 > Create both environments before the first run.
@@ -217,7 +217,7 @@ limited.[^1]
 
 ### Honest About Limitations
 
-Include dedicated sections for drawbacks and limitations. Don't minimize or hide them.
+Include dedicated sections for drawbacks and limitations. Don't minimise or hide them.
 
 ```markdown
 ## Limitations
