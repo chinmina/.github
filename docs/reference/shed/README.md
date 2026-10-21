@@ -87,8 +87,11 @@ go install github.com/chinmina/shed/cmd/shed@latest
 Every downloaded artifact is verified with:
 
 ```sh
-gh attestation verify shed_linux_amd64.tar.gz --repo chinmina/shed
+gh attestation verify shed_linux_amd64.tar.gz --repo chinmina/shed \
+  --signer-workflow chinmina/.github/.github/workflows/goreleaser-release.yml
 ```
+
+`--signer-workflow` is required. The shared workflow in `chinmina/.github` signs every attestation, so `--repo` alone looks for a signer in `chinmina/shed` and fails.
 
 ## octo-sts token source
 

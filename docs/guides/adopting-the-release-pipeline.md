@@ -442,25 +442,28 @@ mise use -g github:<OWNER>/<REPO>
 <summary><strong>Install script</strong></summary>
 
 Each release includes an installer that detects your platform and checks the
-download against checksums embedded in the script:
+download against the checksums embedded in the script:
 
 ```sh
 curl -fsSL https://github.com/<OWNER>/<REPO>/releases/latest/download/install.sh | sh
 ```
 
-It installs to `~/.local/bin`. Pass `-b` for another directory, and a tag to pin a version:
+It installs to `~/.local/bin`. Pass `-b` for another directory. To pin a
+version, fetch the script from that release, so its embedded checksums match:
 
 ```sh
-curl -fsSL https://github.com/<OWNER>/<REPO>/releases/latest/download/install.sh \
+curl -fsSL https://github.com/<OWNER>/<REPO>/releases/download/v1.2.3/install.sh \
   | sh -s -- -b /usr/local/bin v1.2.3
 ```
 
 The script has its own attestation. A verified script holds the genuine checksums
-it then enforces on the binary, so verifying the script covers the binary too:
+for its release and enforces them on the binary, so verifying the script covers
+the binary for that release:
 
 ```sh
 curl -fsSL -O https://github.com/<OWNER>/<REPO>/releases/latest/download/install.sh
-gh attestation verify install.sh --repo <OWNER>/<REPO>
+gh attestation verify install.sh --repo <OWNER>/<REPO> \
+  --signer-workflow chinmina/.github/.github/workflows/goreleaser-release.yml
 sh install.sh
 ```
 
@@ -492,7 +495,8 @@ Download the archive for your platform, verify its provenance, and put the binar
 ```sh
 OS=linux ARCH=amd64   # or darwin/windows, arm64
 curl -fsSLO "https://github.com/<OWNER>/<REPO>/releases/latest/download/<TOOL>_${OS}_${ARCH}.tar.gz"
-gh attestation verify "<TOOL>_${OS}_${ARCH}.tar.gz" --repo <OWNER>/<REPO>
+gh attestation verify "<TOOL>_${OS}_${ARCH}.tar.gz" --repo <OWNER>/<REPO> \
+  --signer-workflow chinmina/.github/.github/workflows/goreleaser-release.yml
 tar -xzf "<TOOL>_${OS}_${ARCH}.tar.gz" <TOOL>
 install -m 0755 <TOOL> ~/.local/bin/
 ```
@@ -523,12 +527,16 @@ No long-lived signing key exists.
 Verify a downloaded artifact with the [GitHub CLI](https://cli.github.com/) (2.49.0 or later):
 
 ```sh
-gh attestation verify <TOOL>_linux_amd64.tar.gz --repo <OWNER>/<REPO>
+gh attestation verify <TOOL>_linux_amd64.tar.gz --repo <OWNER>/<REPO> \
+  --signer-workflow chinmina/.github/.github/workflows/goreleaser-release.yml
 ```
 
-Add `--signer-workflow <OWNER>/<REPO>/.github/workflows/release.yml` to also pin
-the workflow that signed it. `checksums.txt` is published for
-`sha256sum --check checksums.txt`.
+`--repo` checks the source repository. `--signer-workflow` is required because
+the artifacts are signed by the shared release workflow in `chinmina/.github`,
+not by a workflow in this repository.
+
+`checksums.txt` lists every archive. After downloading it alongside an archive, check with
+`sha256sum --check --ignore-missing checksums.txt`, or `shasum -a 256 --check --ignore-missing checksums.txt` on macOS.
 ````
 
 ## 11. Check before the first release
@@ -584,8 +592,11 @@ Run these checks from the repository root before you push.
 
    ```sh
    gh release download v0.1.0 --repo "<OWNER>/<REPO>" --pattern '<TOOL>_linux_amd64.tar.gz'
-   gh attestation verify <TOOL>_linux_amd64.tar.gz --repo "<OWNER>/<REPO>"
+   gh attestation verify <TOOL>_linux_amd64.tar.gz --repo "<OWNER>/<REPO>" \
+     --signer-workflow chinmina/.github/.github/workflows/goreleaser-release.yml
    ```
+
+   The command prints `✓ Verification succeeded!` and exits 0. `--signer-workflow` is required: the shared workflow in `chinmina/.github` signs the attestation, so `--repo` alone fails.
 
 6. Install from each package channel.
 
