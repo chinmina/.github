@@ -9,7 +9,7 @@ The `.github` repository for the [chinmina](https://github.com/chinmina) organis
 
 ## Release pipeline
 
-A repository adds two short caller workflows and its release configuration. The shared workflows turn Conventional Commits into a GitHub Release, with build provenance for every artifact, and publish to Homebrew, Nix, npm, and container registries. The release stays a draft until every artifact is attested, so nothing is downloadable without provenance.
+A repository adds two short caller workflows and its release configuration. The shared workflows turn Conventional Commits into a GitHub Release, with build provenance for every artifact, and publish to Homebrew, Nix, npm, and container registries. The release stays a draft until every artifact is uploaded and attested, so nothing is downloadable without provenance, and the published release can be made immutable.
 
 ```yaml
 # .github/workflows/release.yml in a consuming repository

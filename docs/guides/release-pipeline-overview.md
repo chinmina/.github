@@ -7,6 +7,7 @@ This page explains how the pipeline works. To connect a repository, follow [Adop
 ## Guarantees
 
 - **Nothing is downloadable before its provenance exists.** The release stays a draft until every artifact has a build provenance attestation.
+- **Compatible with immutable releases.** Every asset is uploaded and attested while the release is a draft, and publishing is the last step. With [immutable releases](https://docs.github.com/en/code-security/supply-chain-security/understanding-your-software-supply-chain/immutable-releases) enabled, the published release cannot gain, lose, or change an asset, and its tag cannot move.
 - **No long-lived signing key.** Attestations use Sigstore keyless signing, bound to the workflow run that built the artifacts.
 - **Short-lived, scoped tokens.** Every write uses an installation token minted for the run, limited to the repositories that step writes to.
 - **One configuration for every repository.** Callers differ only in their token source and the channels they disable.
@@ -114,7 +115,7 @@ sequenceDiagram
 
 ## Release states
 
-A release is visible only once it is published, and it is published only after attestation. A failed run anywhere before that leaves a draft that no one can download. Fix the cause and re-run the workflow: `release.replace_existing_artifacts: true` lets goreleaser replace the assets an earlier run uploaded, and `install.sh` is overwritten.
+A release is visible only once it is published, and it is published only after attestation. Publishing is also the point where an immutable release locks, so every asset is final before it does. A failed run anywhere before that leaves a draft that no one can download, and a draft stays editable even with immutable releases enabled. Fix the cause and re-run the workflow: `release.replace_existing_artifacts: true` lets goreleaser replace the assets an earlier run uploaded, and `install.sh` is overwritten.
 
 Two side effects reach outside the draft:
 
@@ -151,7 +152,7 @@ stateDiagram-v2
 | `Draft` | No | The release-please notes and the `v*` tag |
 | `Filled` | No | Archives, `checksums.txt`, and `install.sh` |
 | `Attested` | No | A build provenance attestation for every artifact |
-| `Published` | Yes | Everything above; prerelease tags are marked as prereleases |
+| `Published` | Yes | Everything above; prerelease tags are marked as prereleases. With immutable releases enabled, the assets and tag are locked, and GitHub adds a release attestation |
 
 ## Token sources
 
