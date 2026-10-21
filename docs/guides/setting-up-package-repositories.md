@@ -21,7 +21,7 @@ The tap must be named `homebrew-tap`, so users can run `brew install <OWNER>/tap
      --description "Homebrew casks for tools published by <OWNER>"
    ```
 
-2. Give the release App access to the repository. Under the owner's **Settings → GitHub Apps → (release App) → Configure**, add `homebrew-tap` to the selected repositories.
+2. Give the App that mints tokens access to the repository: the release App, or the octo-sts App on the `octo-sts` token source. Under the owner's **Settings → GitHub Apps → (App) → Configure**, add `homebrew-tap` to the selected repositories.
 
 3. If a ruleset protects the default branch, add the App as a bypass actor. goreleaser pushes unsigned commits directly to the default branch, so a pull request or signed-commit rule rejects them otherwise. Follow [Ruleset bypass](#ruleset-bypass) with `<PACKAGE_REPO>` set to `homebrew-tap`.
 
