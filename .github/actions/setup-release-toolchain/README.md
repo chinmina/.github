@@ -3,8 +3,9 @@
 One upfront installer for a release job, with **mise as the single version
 authority** — req **R18/R19**. It installs the requested CLIs through mise in a
 single cached pass, then sets up Go and/or Bun via their dedicated setup actions
-with versions read from the same mise config. It serves both Go and Bun
-projects: goreleaser builds both, so the kit has one toolchain installer.
+with versions read from the same mise config. Node is set up the same way when
+declared. It serves both Go and Bun projects: goreleaser builds both, so the kit
+has one toolchain installer.
 
 This is a *prescriptive* action: every **requested CLI** MUST be declared in the
 consumer's `mise.toml`. If one is missing, the action fails
@@ -25,16 +26,19 @@ missing declaration.
    declared**.
 4. **`oven-sh/setup-bun`** runs with the Bun version from mise — **only if Bun
    is declared**.
+5. **`actions/setup-node`** runs with the Node version from mise — **only if
+   Node is declared**. The registry URL is left unset; `npm-publish` configures
+   it for its own step.
 
-Go and Bun are version-*extracted* but **not** installed through mise, so no
-mise `go`/`bun` shim competes with their setup action on `PATH`.
+Go, Bun, and Node are version-*extracted* but **not** installed through mise,
+so no mise shim competes with their setup action on `PATH`.
 
 ## Tool classes
 
 | Class | Tools | Behaviour |
 |-------|-------|-----------|
 | Required, mise-installed | the `mise-tools` you pass (e.g. `goreleaser`, `binstaller`) | installed via mise; **fail** if undeclared |
-| Auto-detected, setup-action | Go, Bun | version from mise → `setup-go` / `setup-bun` **iff declared**; skipped if absent |
+| Auto-detected, setup-action | Go, Bun, Node | version from mise → `setup-go` / `setup-bun` / `setup-node` **iff declared**; skipped if absent |
 
 A Go project declares `go`; a Bun project declares `bun`; a project can declare
 both (e.g. a Go binary whose build needs Bun for frontend assets).
@@ -51,6 +55,7 @@ both (e.g. a Go binary whose build needs Bun for frontend assets).
 |--------|-------------|
 | `go_version` | Go version resolved from mise (empty if Go is not declared). |
 | `bun_version` | Bun version resolved from mise (empty if Bun is not declared). |
+| `node_version` | Node version resolved from mise (empty if Node is not declared). |
 
 The mise CLIs land on `PATH` for later steps: `jdx/mise-action` writes the shims
 directory to `$GITHUB_PATH` and runs `mise reshim -f`. (A bare `mise install` in
@@ -77,9 +82,10 @@ a `run:` step would not — `PATH` edits there don't carry to later steps; only
 > [tool_alias]
 > binstaller = "github:binary-install/binstaller"
 >
-> [tools]
-> binstaller = { version = "0.12.0", exe = "binst" }
+> [tools.binstaller]
+> version = "0.12.0"
+> rename_exe = "binst"
 > ```
 >
-> See [Declaring `binstaller`](../../../docs/adopting-the-release-pipeline.md#declaring-binstaller)
+> See [binstaller declaration](../../../docs/reference/repository-configuration.md#binstaller-declaration)
 > for why each piece is required.
