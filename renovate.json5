@@ -85,6 +85,12 @@
       groupName: "GitHub Actions",
     },
     {
+      description: "Bump Bun in mise.toml and the npm-publish action together, so the action publishes with the Bun its tests ran on.",
+      matchDepNames: ["bun"],
+      matchFileNames: ["mise.toml", ".github/actions/npm-publish/action.yml"],
+      groupName: "Bun",
+    },
+    {
       description: "Bump the docs' pinned versions and the shed example in one PR, so they never disagree.",
       matchFileNames: ["docs/**"],
       groupName: "Documentation versions",
