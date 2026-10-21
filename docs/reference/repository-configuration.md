@@ -73,6 +73,7 @@ GitHub creates a missing environment on first use, with no protection rules. Eac
 | --- | ----- | ------- |
 | `release.draft` | `true` | Leaves the release as a draft. The wrapper publishes it after attestation. Checked before the build. |
 | `release.use_existing_draft` | `true` | Lets goreleaser find the release-please draft. Without it, goreleaser creates a second release. Checked before the build. |
+| `release.replace_existing_artifacts` | `true` | Lets a re-run replace assets an earlier run uploaded. Without it, the re-run fails with HTTP 422 on the first existing asset. Not checked by the kit. |
 | `release.mode` | `keep-existing` | Keeps the release-please title and notes. |
 | `release.prerelease` | `auto` | Marks tags such as `v1.2.3-rc.1` as prereleases. |
 | `checksum.name_template` | `checksums.txt` | The wrapper attests every file listed in `dist/checksums.txt`. |

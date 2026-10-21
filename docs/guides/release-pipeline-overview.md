@@ -114,7 +114,12 @@ sequenceDiagram
 
 ## Release states
 
-A release is visible only once it is published, and it is published only after attestation. A failed run anywhere before that leaves a draft that no one can download, so it is safe to fix the cause and run the workflow again.
+A release is visible only once it is published, and it is published only after attestation. A failed run anywhere before that leaves a draft that no one can download. Fix the cause and re-run the workflow: `release.replace_existing_artifacts: true` lets goreleaser replace the assets an earlier run uploaded, and `install.sh` is overwritten.
+
+Two side effects reach outside the draft:
+
+- goreleaser commits the Homebrew cask and Nix recipe before attestation. After a later failure, they point at a release that is not yet published, so installs fail until a re-run succeeds. The re-run commits them again.
+- npm versions cannot be overwritten. If the npm step fails after publishing some packages, a re-run fails on those packages. Release a new patch version instead.
 
 ```mermaid
 stateDiagram-v2

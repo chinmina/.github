@@ -281,6 +281,7 @@ archives:
 release:
   draft: true # the release workflow publishes it after attestation
   use_existing_draft: true # find and fill the release-please draft
+  replace_existing_artifacts: true # let a re-run replace assets an earlier run uploaded
   mode: keep-existing # keep the release-please title and notes
   prerelease: auto # mark v1.2.3-rc.1 style tags as prereleases
 
