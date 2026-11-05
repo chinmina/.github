@@ -16,7 +16,7 @@ runs:
   steps:
     # mise only: the validator is installed on demand by `mise exec`.
     - name: Install mise
-      uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7 # v5.2.0
+      uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195 # v5.2.5
       with:
         install: false
         cache: false
