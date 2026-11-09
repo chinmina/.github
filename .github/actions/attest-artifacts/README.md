@@ -3,9 +3,9 @@
 Generate keyless build-provenance attestations for a goreleaser checksums file
 and, optionally, an extra file such as `install.sh` — reqs **R28/R29/R30**.
 
-The checksums file is passed to `actions/attest-build-provenance` via
-`subject-checksums`, so **each artifact listed in the file becomes its own
-attested subject**. That is what makes `gh attestation verify <archive>` succeed
+The checksums file is passed to `actions/attest` via `subject-checksums`, so
+**each artifact listed in the file becomes its own attested subject**. No
+predicate input is set, so `actions/attest` generates SLSA build provenance. That is what makes `gh attestation verify <archive>` succeed
 against the individual release archives (not just the checksums file).
 
 ## Inputs
