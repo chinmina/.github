@@ -138,6 +138,14 @@
       separateMultipleMajor: true,
     },
     {
+      // Datasources, not depNames: excludes the golang/node container images and the npm "node" package.
+      // Bun is left out: its patch releases are routine bug fixes, not security releases.
+      description: "Take Go and Node runtime patch releases without the release-age hold: they ship security fixes from first-party distribution channels.",
+      matchDatasources: ["golang-version", "node-version"],
+      matchUpdateTypes: ["patch"],
+      minimumReleaseAge: "0 days",
+    },
+    {
       // Scope: any version-like ref. Branch refs (main) and moving refs
       // (verified-actions) don't match and keep default behaviour.
       // Candidates are full stable releases only. The regex also parses a
