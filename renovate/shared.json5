@@ -138,10 +138,12 @@
       separateMultipleMajor: true,
     },
     {
-      // Datasources, not depNames: excludes the golang/node container images and the npm "node" package.
+      // mise looks Go up as github-tags golang/go; go.mod and nvm use golang-version/node-version.
+      // Both matchers are needed: packageName "node" alone also hits the node container image and npm package.
       // Bun is left out: its patch releases are routine bug fixes, not security releases.
       description: "Take Go and Node runtime patch releases without the release-age hold: they ship security fixes from first-party distribution channels.",
-      matchDatasources: ["golang-version", "node-version"],
+      matchDatasources: ["golang-version", "node-version", "github-tags"],
+      matchPackageNames: ["go", "node", "golang/go"],
       matchUpdateTypes: ["patch"],
       minimumReleaseAge: "0 days",
     },
