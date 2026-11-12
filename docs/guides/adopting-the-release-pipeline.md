@@ -204,8 +204,8 @@ mise is the version authority for the tools the repository and the release job u
 ```toml
 # mise.toml
 [tools]
-go = "1.27.3"
-goreleaser = "2.19.0"
+go = "1.27.4"
+goreleaser = "2.20.0"
 
 # binstaller has no mise registry short name. The alias makes it surface under
 # the key `binstaller` (which setup-release-toolchain checks for), and
