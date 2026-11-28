@@ -205,7 +205,7 @@ mise is the version authority for the tools the repository and the release job u
 # mise.toml
 [tools]
 go = "1.27.4"
-goreleaser = "2.20.0"
+goreleaser = "2.20.3"
 
 # binstaller has no mise registry short name. The alias makes it surface under
 # the key `binstaller` (which setup-release-toolchain checks for), and
@@ -603,7 +603,7 @@ Run these checks from the repository root before you push.
 
    ```sh
    mise exec actionlint@1.7.12 -- actionlint
-   mise exec zizmor@1.32.0 -- zizmor .github/workflows
+   mise exec zizmor@1.33.1 -- zizmor .github/workflows
    ```
 
    Both report no findings.
